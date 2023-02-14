@@ -1,28 +1,12 @@
 version: "3.7"
 services:
-  intelligence:
-    entrypoint: python main.py
-    container_name: intelligence
-    ports:
-      - "8000:8000"
-    image: "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}"
-    build:
-      dockerfile: "${DOCKERFILE}"
-      context: .
-      target: "${TARGET}"
-    volumes:
-      - "./:/intelligence"
-    depends_on:
-      - celery_worker_intelligence
-    environment:
-      IMAGE_TAG_NAME: "${IMAGE_TAG_NAME}"
-      TARGET: "${TARGET}"
-      FULL_ECR_REPOSITORY: "${FULL_ECR_REPOSITORY}"
   redis_intelligence:
     image: "redis:alpine"
     container_name: redis_intelligence
     ports:
       - "6379:6379"
+    networks:
+      - mynetwork
   celery_worker_intelligence:
     entrypoint: python run_worker.py
     container_name: celery_worker_intelligence
@@ -45,15 +29,29 @@ services:
       IMAGE_TAG_NAME: "${IMAGE_TAG_NAME}"
       TARGET: "${TARGET}"
       FULL_ECR_REPOSITORY: "${FULL_ECR_REPOSITORY}"
+    networks:
+      - mynetwork
   flower:
-    image: "mher/flower"
+    entrypoint: celery flower -A cron_tasks
+    image: "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}-flower"
     container_name: celery_flower_intelligence
+    restart: on-failure
+    depends_on:
+      - redis_intelligence
+    build:
+      dockerfile: "${DOCKERFILE}"
+      cache_from:
+        - "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}"
+      context: .
+      target: "${TARGET}-flower"
     ports:
       - "5555:5555"
     environment:
-      BROKER_URL: "redis://redis_intelligence:6379"
+      BROKER_URL: ${REDIS_URL}
+    networks:
+      - mynetwork
   celery_beat:
-    entrypoint: celery -A intelligence.celery beat -l INFO -S django_celery_beat.schedulers:DatabaseScheduler
+    entrypoint: celery -A cron_tasks beat -l INFO
     container_name: celery_beat_intelligence
     depends_on:
       - redis_intelligence
@@ -73,3 +71,21 @@ services:
       IMAGE_TAG_NAME: "${IMAGE_TAG_NAME}"
       TARGET: "${TARGET}"
       FULL_ECR_REPOSITORY: "${FULL_ECR_REPOSITORY}"
+    networks:
+      - mynetwork
+  postgres_intelligence:
+    image: "postgres:13.2-alpine"
+    container_name: postgres_intelligence
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    networks:
+      - mynetwork
+
+networks:
+  mynetwork:
+    name: mynetwork

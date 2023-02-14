@@ -46,6 +46,12 @@ build:
 up:
 	docker-compose up -d
 
+bash:
+	docker exec -it celery_worker_intelligence /bin/bash
+
+postgres:
+	docker-compose up -d postgres_intelligence
+
 # Will list the containers
 # This is useful for debugging
 # Read more: https://docs.docker.com/compose/reference/ps/
@@ -56,4 +62,4 @@ redis:
 stop:
 	docker-compose stop
 logs:
-	docker-compose logs -f --tail 100 intelligence celery_worker_intelligence
+	docker-compose logs -f --tail 100 celery_worker_intelligence

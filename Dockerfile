@@ -17,8 +17,22 @@ ENV PYTHONUNBUFFERED 1
 
 COPY . /intelligence
 
+RUN chmod +x /intelligence/scripts/*.sh
+
 FROM base AS development
 
-FROM base AS development-celery
-
 FROM base AS development-celery-beat
+FROM base AS staging-celery-beat
+
+FROM base AS development-celery
+ENTRYPOINT ["scripts/celery.sh"]
+
+FROM base AS development-flower
+ENTRYPOINT ["scripts/flower.sh"]
+
+FROM base AS staging-celery
+ENTRYPOINT ["scripts/celery.sh"]
+
+FROM base AS staging-flower
+ENTRYPOINT ["scripts/flower.sh"]
+

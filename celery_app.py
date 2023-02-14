@@ -1,5 +1,7 @@
 from celery import Celery
+from dotenv import load_dotenv
 
+load_dotenv()
 app = Celery('tasks')
 
 default_config = "celery_config"
@@ -10,6 +12,7 @@ app.conf.update(
     {
         "CELERY_IMPORTS": [
             "tasks",
+            "cron_tasks"
         ]
     }
 )

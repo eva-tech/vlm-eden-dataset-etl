@@ -19,28 +19,27 @@ get_studies = """
            ps.deleted,
            ps.migrated
     from pacs_studies ps
-             left join pacs_series p on ps.id = p.study_id and p.deleted = false
-             left join pacs_modalities pm on p.modality_id = pm.id and p.deleted = false
-             left join pacs_reports pr on ps.id = pr.study_id and pr.deleted=false and pr.is_active
+             left join pacs_series p on ps.id = p.study_id
+             left join pacs_modalities pm on p.modality_id = pm.id
+             left join (select id, study_id, signed_at, status, created_at, signed_by_id, updated_at,
+                                                rank() over (partition by study_id order by created_at desc) as rank
+                                                from pacs_reports
+                                                where is_active
+                                                  and not deleted
+                                                group by study_id, created_at, id
+                                                order by created_at) pr on ps.id = pr.study_id and pr.rank = 1
              left join pacs_patients pu on ps.patient_id = pu.id
     where ps.organization_id=%(organization_id)s 
     and (ps.created_at > (%(date)s)::timestamptz or ps.updated_at > (%(date)s)::timestamptz
     or pr.updated_at > (%(date)s)::timestamptz)
     group by ps.id,
+             pu.id,
+             pr.id,
              pr.signed_at,
-             ps.urgency_level,
-             ps.status,
-             ps.id,
+             pr.created_at,
              pr.status,
-             pu.full_name,
-             ps.facility_id,
-             ps.created_at,
-             ps.updated_at,
-             ps.dicom_date_time,
-             ps.referring_practitioner_id,
              pr.signed_by_id,
-             pu.gender,
-             pu.birth_date
+             ps.urgency_level
     having count(p.id) > 0;
 """
 

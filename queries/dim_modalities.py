@@ -7,17 +7,16 @@ get_modalities_list = """
         created_at,
         updated_at
     FROM pacs_modalities
-    WHERE (created_at > (%(date)s)::timestamptz or updated_at > (%(date)s)::timestamptz)
     order by identifier
 """
 
 get_modalities_from_studies = """
     select distinct string_agg(distinct pm.identifier, ',' order by pm.identifier) as modalities
     from pacs_studies ps
-             left join pacs_series p on ps.id = p.study_id and p.deleted = false
-             left join pacs_modalities pm on p.modality_id = pm.id and p.deleted = false
-    where p.deleted = false and ps.organization_id = %(organization_id)s
-    and (ps.created_at > (%(date)s)::timestamptz or ps.updated_at > (%(date)s)::timestamptz)
+             left join pacs_series p on ps.id = p.study_id
+             left join pacs_modalities pm on p.modality_id = pm.id
+    where ps.organization_id = %(organization_id)s and pm.identifier is not null
+    and (ps.created_at >= (%(date)s)::timestamptz or ps.updated_at >= (%(date)s)::timestamptz)
     group by ps.id
 """
 
