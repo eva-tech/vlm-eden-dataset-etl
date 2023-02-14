@@ -3,6 +3,7 @@ import socket
 from celery_app import app
 
 if __name__ == "__main__":
+    print("starting worker")
     worker_key = "default"
     worker = app.Worker(
         hostname=f"{worker_key}@{socket.gethostname()}",

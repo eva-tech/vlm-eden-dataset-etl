@@ -39,7 +39,7 @@ class SyncModalities(SyncBase):
             for data in data_modalities:
                 if data["identifier"] in multi_mod:
                     tmp_modality["id"] = str(uuid.uuid4())
-                    tmp_modality["name"] = ",".join(sorted([x for x in [data["name"], tmp_modality["name"]] if x]))
+                    tmp_modality["name"] = ",".join(sorted([x for x in [data["name"] or data["identifier"], tmp_modality["name"] or tmp_modality["identifier"]] if x]))
                     tmp_modality["identifier"] = ",".join(
                         sorted([x for x in [data["identifier"], tmp_modality["identifier"]] if x]))
                     tmp_modality["description"] = ",".join(
@@ -61,6 +61,8 @@ class SyncModalities(SyncBase):
         self.record_sync(self.TABLE_NAME, date, total_records)
 
     def sync_original_modalities(self, data_modalities):
+        for modality in data_modalities:
+            modality["name"] = modality["name"] or modality["identifier"]
         sql_query = sql.SQL(insert_modalities).format(schema=sql.Identifier(self.schema_name))
         extras.execute_values(
             self.destination_cursor, sql_query, data_modalities, template=insert_modalities_template, page_size=100
@@ -71,7 +73,7 @@ class SyncModalities(SyncBase):
         date = datetime.now()
         last_sync = self.get_last_sync_date(self.TABLE_NAME)
 
-        self.source_cursor.execute(get_modalities_list, {"date": last_sync})
+        self.source_cursor.execute(get_modalities_list)
         data_modalities = self.source_cursor.fetchall()
         self.sync_original_modalities(data_modalities)
         self.sync_modalities_from_studies(data_modalities, last_sync, date)
