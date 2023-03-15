@@ -36,5 +36,4 @@ class SyncBase:
         sql_query = sql.SQL(get_last_sync_date).format(schema=sql.Identifier(self.schema_name))
         self.destination_cursor.execute(sql_query, {"table_name": table_name})
         result = self.destination_cursor.fetchone()
-        print(f"para el schema {self.schema_name} la fecha es {result}")
         return result["max"] or datetime(2019, 1, 1)
