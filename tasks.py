@@ -5,7 +5,6 @@ from sync.modalities import SyncModalities
 from sync.practitioners import SyncPractitioners
 from sync.studies import SyncStudies
 from sync.sync_base import OrganizationData
-from sync.technicians import SyncTechnicians
 from utils import get_schema_name
 
 
@@ -25,8 +24,9 @@ def sync_data_from_by_organization(organization_id, organization_slug):
     sync_practitioners = SyncPractitioners(organization_data, bridge)
     sync_practitioners.retrieve_data()
 
-    sync_technicians = SyncTechnicians(organization_data, bridge)
-    sync_technicians.retrieve_data()
+    # Pending to QA
+    # sync_technicians = SyncTechnicians(organization_data, bridge)
+    # sync_technicians.retrieve_data()
 
     sync_studies = SyncStudies(organization_data, bridge)
     sync_studies.retrieve_data()
