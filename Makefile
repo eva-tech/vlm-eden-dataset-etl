@@ -62,4 +62,4 @@ redis:
 stop:
 	docker-compose stop
 logs:
-	docker-compose logs -f --tail 100 celery_worker_intelligence
+	docker-compose logs -f --tail 100 celery_worker_intelligence flower
