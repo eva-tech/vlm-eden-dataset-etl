@@ -23,6 +23,7 @@ FROM base AS development
 
 FROM base AS development-celery-beat
 FROM base AS staging-celery-beat
+FROM base AS production-celery-beat
 
 FROM base AS development-celery
 ENTRYPOINT ["scripts/celery.sh"]
@@ -35,4 +36,11 @@ ENTRYPOINT ["scripts/celery.sh"]
 
 FROM base AS staging-flower
 ENTRYPOINT ["scripts/flower.sh"]
+
+FROM base AS production-celery
+ENTRYPOINT ["scripts/celery.sh"]
+
+FROM base AS production-flower
+ENTRYPOINT ["scripts/flower.sh"]
+
 
