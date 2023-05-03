@@ -17,7 +17,8 @@ get_studies = """
            pu.gender,
            pu.birth_date,
            ps.deleted,
-           ps.migrated
+           ps.migrated,
+           string_agg(distinct nullif(trim(p.dicom_operators_name), ''), ',' order by nullif(trim(p.dicom_operators_name),'')) as technician_names 
     from pacs_studies ps
              left join pacs_series p on ps.id = p.study_id
              left join pacs_modalities pm on p.modality_id = pm.id
@@ -66,7 +67,8 @@ INSERT INTO {schema}.fact_studies (
     calendar_id,
     practitioner_id,
     referring_practitioner_id,
-    signed_by_id
+    signed_by_id,
+    technicians_id
 ) VALUES %s
 ON CONFLICT (external_id) 
 DO UPDATE SET 
@@ -85,7 +87,8 @@ DO UPDATE SET
     calendar_dicom_date_time_id = excluded.calendar_dicom_date_time_id,
     practitioner_id = excluded.practitioner_id,
     referring_practitioner_id = excluded.referring_practitioner_id,
-    signed_by_id = excluded.signed_by_id;
+    signed_by_id = excluded.signed_by_id,
+    technicians_id = excluded.technicians_id;
 """
 
 insert_studies_template = """
@@ -110,5 +113,6 @@ insert_studies_template = """
     (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(created_at)s)::date),
     (select id from {schema}.dim_practitioners where external_id = %(practitioner_id)s),
     (select id from {schema}.dim_practitioners where external_id = %(referring_practitioner_id)s),
-    (select id from {schema}.dim_practitioners where external_id = %(signed_by_id)s))
+    (select id from {schema}.dim_practitioners where external_id = %(signed_by_id)s),
+    (select id from {schema}.dim_technicians where name = %(technician_names)s))
 """

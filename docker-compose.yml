@@ -32,7 +32,7 @@ services:
     networks:
       - mynetwork
   flower:
-    entrypoint: celery flower -A cron_tasks
+    entrypoint: celery flower -A cron_tasks --conf=flower_config.py
     image: "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}-flower"
     container_name: celery_flower_intelligence
     restart: on-failure
@@ -48,6 +48,8 @@ services:
       - "5555:5555"
     environment:
       BROKER_URL: ${REDIS_URL}
+      FLOWER_USER: ${FLOWER_USER}
+      FLOWER_PASSWORD: ${FLOWER_PASSWORD}
     networks:
       - mynetwork
   celery_beat:
