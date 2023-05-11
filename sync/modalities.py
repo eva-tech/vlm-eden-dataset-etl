@@ -45,6 +45,7 @@ class SyncModalities(SyncBase):
                         sorted([x for x in [data["identifier"], tmp_modality["identifier"]] if x]))
                     tmp_modality["description"] = ",".join(
                         sorted([x for x in [data["description"] or "", tmp_modality["description"]] if x]))
+                    tmp_modality["name_es"] = ",".join(sorted([x for x in [data["name_es"] or data["identifier"], tmp_modality["name_es"] or tmp_modality["identifier"]] if x]))
 
             if tmp_modality != empty_modality:
                 to_insert.append(tmp_modality)
