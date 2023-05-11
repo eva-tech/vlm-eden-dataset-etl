@@ -28,6 +28,7 @@ class SyncModalities(SyncBase):
         empty_modality = {
             "id": "",
             "name": "",
+            "name_es": "",
             "identifier": "",
             "description": "",
             "created_at": datetime.now(),
