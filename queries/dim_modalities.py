@@ -38,6 +38,7 @@ insert_modalities = """
         description = excluded.description,
         created_at = excluded.created_at,
         updated_at = excluded.updated_at;
+        name_es = excluded.name_es
 """
 
 insert_modalities_template = """
