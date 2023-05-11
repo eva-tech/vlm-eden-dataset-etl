@@ -65,6 +65,7 @@ class SyncModalities(SyncBase):
     def sync_original_modalities(self, data_modalities):
         for modality in data_modalities:
             modality["name"] = modality["name"] or modality["identifier"]
+            modality["name_es"] = modality["name_es"] or modality["identifier"]
         sql_query = sql.SQL(insert_modalities).format(schema=sql.Identifier(self.schema_name))
         extras.execute_values(
             self.destination_cursor, sql_query, data_modalities, template=insert_modalities_template, page_size=100
