@@ -7,7 +7,7 @@ from psycopg2 import sql, extras
 from queries.dim_modalities import get_modalities_list, insert_modalities, get_modalities_from_studies, \
     insert_modalities_template, get_dim_modalities, fix_names_template
 from sync.sync_base import SyncBase
-from utils import first_true, helper
+from utils import first_true, combine_and_sort_dictionary_values
 
 
 class SyncModalities(SyncBase):
@@ -41,8 +41,8 @@ class SyncModalities(SyncBase):
             for data in data_modalities:
                 if data["identifier"] in multi_mod:
                     tmp_modality["id"] = str(uuid.uuid4())
-                    tmp_modality["name_es"] = helper(data, tmp_modality, ["name_es", "name"])
-                    tmp_modality["name"] = helper(data, tmp_modality, ["name", "identifier"])
+                    tmp_modality["name_es"] = combine_and_sort_dictionary_values(data, tmp_modality, ["name_es", "name"])
+                    tmp_modality["name"] = combine_and_sort_dictionary_values(data, tmp_modality, ["name", "identifier"])
                     tmp_modality["identifier"] = ",".join(
                         sorted([x for x in [data["identifier"], tmp_modality["identifier"]] if x]))
                     tmp_modality["description"] = ",".join(
@@ -95,8 +95,8 @@ class SyncModalities(SyncBase):
                 arr_modalities = modality['identifier'].split(",")
                 for data in data_modalities:
                     if data["identifier"] in arr_modalities:
-                        tmp_modality["name_es"] = helper(data, tmp_modality, ["name_es", "name"])
-                        tmp_modality["name"] = helper(data, tmp_modality, ["name", "identifier"])
+                        tmp_modality["name_es"] = combine_and_sort_dictionary_values(data, tmp_modality, ["name_es", "name"])
+                        tmp_modality["name"] = combine_and_sort_dictionary_values(data, tmp_modality, ["name", "identifier"])
                 modality["name_es"] = tmp_modality["name_es"]
                 modality["name"] = tmp_modality["name"]
                 tmp_modality = empty_modality.copy()
