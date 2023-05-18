@@ -52,3 +52,27 @@ insert_modalities_template = """
         %(name_es)s
     )
 """
+
+fix_names_template = """
+    (
+        %(external_id)s,
+        %(name)s,
+        %(identifier)s,
+        %(description)s,
+        %(created_at)s,
+        %(updated_at)s,
+        %(name_es)s
+    )
+"""
+
+get_dim_modalities = """
+    SELECT 
+        external_id, 
+        name, 
+        identifier, 
+        description, 
+        created_at, 
+        updated_at,
+        name_es
+    from {schema}.dim_modalities
+"""
