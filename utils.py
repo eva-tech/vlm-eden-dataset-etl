@@ -17,7 +17,7 @@ def first_true(iterable, default=None, pred=None):
     # first_true([a,b], x, f) --> a if f(a) else b if f(b) else x
     return next(filter(pred, iterable), default)
 
-def helper(data, tmp_data, vals):
+def combine_and_sort_dictionary_values(data, tmp_data, vals):
     """
     Helps combine strings from two dictionaries checking through the keys in vals.
     data: Dictionary with values
