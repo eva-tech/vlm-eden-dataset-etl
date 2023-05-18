@@ -5,7 +5,8 @@ get_modalities_list = """
         identifier,
         description,
         created_at,
-        updated_at
+        updated_at,
+        name_es
     FROM pacs_modalities
     order by identifier
 """
@@ -27,7 +28,8 @@ insert_modalities = """
         identifier, 
         description, 
         created_at, 
-        updated_at
+        updated_at,
+        name_es
     )
     VALUES %s
     ON CONFLICT (identifier)   
@@ -35,7 +37,8 @@ insert_modalities = """
         name = excluded.name,
         description = excluded.description,
         created_at = excluded.created_at,
-        updated_at = excluded.updated_at;
+        updated_at = excluded.updated_at,
+        name_es = excluded.name_es;
 """
 
 insert_modalities_template = """
@@ -45,6 +48,31 @@ insert_modalities_template = """
         %(identifier)s,
         %(description)s,
         %(created_at)s,
-        %(updated_at)s
+        %(updated_at)s,
+        %(name_es)s
     )
+"""
+
+fix_names_template = """
+    (
+        %(external_id)s,
+        %(name)s,
+        %(identifier)s,
+        %(description)s,
+        %(created_at)s,
+        %(updated_at)s,
+        %(name_es)s
+    )
+"""
+
+get_dim_modalities = """
+    SELECT 
+        external_id, 
+        name, 
+        identifier, 
+        description, 
+        created_at, 
+        updated_at,
+        name_es
+    from {schema}.dim_modalities
 """
