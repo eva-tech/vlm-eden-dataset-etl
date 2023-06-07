@@ -8,7 +8,7 @@ if __name__ == "__main__":
     worker = app.Worker(
         hostname=f"{worker_key}@{socket.gethostname()}",
         queues=[],
-        optimization="fair",
+        optimization="default",
         detach=True,
         loglevel="DEBUG",
         concurrency=2,
