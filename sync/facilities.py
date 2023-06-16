@@ -12,9 +12,8 @@ class SyncFacilities(SyncBase):
     def retrieve_data(self):
         query_date = datetime.now()
         last_sync = self.get_last_sync_date(self.TABLE_NAME)
-        last_sync_one_hour_ago = last_sync - datetime.timedelta(hours=1)
 
-        self.source_cursor.execute(get_all_facilities, {"organization_id": self.organization_id, "date": last_sync_one_hour_ago})
+        self.source_cursor.execute(get_all_facilities, {"organization_id": self.organization_id, "date": last_sync})
         data = self.source_cursor.fetchall()
         sql_query = sql.SQL(insert_facilities).format(sql.Identifier(self.schema_name))
         extras.execute_values(
