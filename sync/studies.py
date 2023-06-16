@@ -25,6 +25,7 @@ class SyncStudies(SyncBase):
         extras.execute_values(
             self.destination_cursor, sql_query, data_studies, template=template, page_size=200
         )
+
         self.destination_conn.commit()
 
         self.record_sync(self.TABLE_NAME, query_date, len(data_studies))

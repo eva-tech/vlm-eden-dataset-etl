@@ -6,6 +6,7 @@ get_studies = """
            pr.signed_at as sign_at,
            pr.status,
            ps.facility_id,
+           pf.timezone as facility_timezone,
            ps.created_at,
            ps.updated_at,
            ps.dicom_date_time,
@@ -21,6 +22,7 @@ get_studies = """
            string_agg(distinct nullif(trim(p.dicom_operators_name), ''), ',' order by nullif(trim(p.dicom_operators_name),'')) as technician_names 
     from pacs_studies ps
              left join pacs_series p on ps.id = p.study_id
+             left join pacs_facilities pf on ps.facility_id = pf.id
              left join pacs_modalities pm on p.modality_id = pm.id
              left join (select id, study_id, signed_at, status, created_at, signed_by_id, updated_at,
                                                 rank() over (partition by study_id order by created_at desc) as rank
@@ -40,7 +42,9 @@ get_studies = """
              pr.created_at,
              pr.status,
              pr.signed_by_id,
-             ps.urgency_level
+             ps.urgency_level,
+             pf.id,
+             pf.timezone
     having count(p.id) > 0;
 """
 
@@ -105,12 +109,12 @@ insert_studies_template = """
     %(birth_date)s, 
     %(deleted)s, 
     %(migrated)s, 
-    (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(sign_at)s)::date),
-    (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(birth_date)s)::date),
-    (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(dicom_date_time)s)::date),
+    (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(sign_at)s AT TIME ZONE %(facility_timezone)s)::date),
+    (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(birth_date)s AT TIME ZONE %(facility_timezone)s)::date),
+    (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(dicom_date_time)s AT TIME ZONE %(facility_timezone)s)::date),
     (select id from {schema}.dim_facilities where external_id = %(facility_id)s),
     (select id from {schema}.dim_modalities where identifier = %(identifier)s),
-    (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(created_at)s)::date),
+    (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(created_at)s AT TIME ZONE %(facility_timezone)s)::date),
     (select id from {schema}.dim_practitioners where external_id = %(practitioner_id)s),
     (select id from {schema}.dim_practitioners where external_id = %(referring_practitioner_id)s),
     (select id from {schema}.dim_practitioners where external_id = %(signed_by_id)s),
