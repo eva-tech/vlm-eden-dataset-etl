@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 
 from psycopg2 import sql, extras
@@ -112,11 +112,13 @@ class SyncModalities(SyncBase):
     def retrieve_data(self):
         date = datetime.now()
         last_sync = self.get_last_sync_date(self.TABLE_NAME)
+        last_sync_one_hour_ago = last_sync - timedelta(hours=1)
+
 
         self.source_cursor.execute(get_modalities_list)
         data_modalities = self.source_cursor.fetchall()
         self.sync_original_modalities(data_modalities)
-        self.sync_modalities_from_studies(data_modalities, last_sync, date)
+        self.sync_modalities_from_studies(data_modalities, last_sync_one_hour_ago, date)
         self.destination_cursor.execute(sql.SQL(get_dim_modalities).format(schema=sql.Identifier(self.schema_name)))
         current_modalities = self.destination_cursor.fetchall()
         self.sync_names(current_modalities, data_modalities)

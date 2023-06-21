@@ -20,6 +20,6 @@ enable_utc = True
 beat_schedule = {
     "elt_task": {
         "task": "cron_tasks.run_etl",
-        "schedule": 300,  # every 30 seconds
+        "schedule": 600  # every 10 minutes
     },
 }
