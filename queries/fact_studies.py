@@ -10,7 +10,7 @@ get_studies = """
            ps.created_at,
            ps.updated_at,
            ps.dicom_date_time,
-           string_agg(distinct pm.identifier, ',' order by pm.identifier) as identifier,
+           ps.modalities as identifier,
            ps.practitioner_id,
            ps.referring_practitioner_id,
            pr.signed_by_id,
@@ -35,6 +35,7 @@ get_studies = """
     where ps.organization_id=%(organization_id)s 
     and (ps.created_at > (%(date)s)::timestamptz or ps.updated_at > (%(date)s)::timestamptz
     or pr.updated_at > (%(date)s)::timestamptz)
+    {extra_filter}
     group by ps.id,
              pu.id,
              pr.id,
@@ -45,7 +46,6 @@ get_studies = """
              ps.urgency_level,
              pf.id,
              pf.timezone
-    having count(p.id) > 0;
 """
 
 insert_studies = """
@@ -119,4 +119,18 @@ insert_studies_template = """
     (select id from {schema}.dim_practitioners where external_id = %(referring_practitioner_id)s),
     (select id from {schema}.dim_practitioners where external_id = %(signed_by_id)s),
     (select id from {schema}.dim_technicians where name = %(technician_names)s))
+"""
+
+get_studies_by_date = """
+    select external_id
+    from {schema}.fact_studies
+    where created_at::date between (%(start_date)s)::date and (%(end_date)s)::date
+"""
+
+get_studies_by_not_ids = """
+    select id
+    from pacs_studies
+    where id not in %(ids)s
+    and organization_id=%(organization_id)s
+    and created_at::date between (%(start_date)s)::date and (%(end_date)s)::date
 """
