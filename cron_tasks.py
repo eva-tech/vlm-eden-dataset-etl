@@ -8,7 +8,7 @@ from celery_app import app
 from database import create_connection_to_source, create_connection_to_destination
 from queries.schema_organizations import organizations_with_product, create_schema
 from utils import get_schema_name
-from tasks import sync_data_from_by_organization
+from tasks import sync_data_from_by_organization, sync_pending_data_by_organization
 
 
 def run_migrations():
@@ -37,14 +37,26 @@ def run_migrations():
     conn_destination.close()
 
 
-def fetch_dim_data():
+def organization_with_intelligence():
     conn_source = create_connection_to_source()
-    cursor_source = conn_source.cursor(cursor_factory=extras.RealDictCursor)
-    cursor_source.execute(organizations_with_product, ("intelligence",))
+    try:
+        cursor_source = conn_source.cursor(cursor_factory=extras.RealDictCursor)
+        cursor_source.execute(organizations_with_product, ("intelligence",))
+        conn_source.close()
+        return cursor_source.fetchall()
+    finally:
+        conn_source.close()
 
-    for organization in cursor_source.fetchall():
+def fetch_dim_data():
+    organizations = organization_with_intelligence()
+    for organization in organizations:
         sync_data_from_by_organization.delay(organization['id'], organization['slug'])
-    conn_source.close()
+
+@app.task
+def fetch_no_synced_data():
+    organizations = organization_with_intelligence()
+    for organization in organizations():
+        sync_pending_data_by_organization.delay(organization['id'], organization['slug'])
 
 
 @app.task
