@@ -5,6 +5,7 @@ from sync.modalities import SyncModalities
 from sync.practitioners import SyncPractitioners
 from sync.studies import SyncStudies
 from sync.sync_base import OrganizationData
+from sync.sync_validator import SyncValidator
 from utils import get_schema_name
 
 
@@ -32,3 +33,13 @@ def sync_data_from_by_organization(organization_id, organization_slug):
     sync_studies.retrieve_data()
 
     bridge.close_connections()
+
+
+@app.task
+def sync_pending_data_by_organization(organization_id, organization_slug):
+    organization_data = OrganizationData(
+        organization_id,
+        get_schema_name(organization_slug),
+    )
+    bridge = DatabaseBridge()
+    SyncValidator(organization_data, bridge).retrieve_data()
