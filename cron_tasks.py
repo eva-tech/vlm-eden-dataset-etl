@@ -42,7 +42,6 @@ def organization_with_intelligence():
     try:
         cursor_source = conn_source.cursor(cursor_factory=extras.RealDictCursor)
         cursor_source.execute(organizations_with_product, ("intelligence",))
-        conn_source.close()
         return cursor_source.fetchall()
     finally:
         conn_source.close()
