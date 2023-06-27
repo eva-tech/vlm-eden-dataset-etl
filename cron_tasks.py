@@ -54,7 +54,7 @@ def fetch_dim_data():
 @app.task
 def fetch_no_synced_data():
     organizations = organization_with_intelligence()
-    for organization in organizations():
+    for organization in organizations:
         sync_pending_data_by_organization.delay(organization['id'], organization['slug'])
 
 
