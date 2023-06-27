@@ -6,6 +6,7 @@ from psycopg2 import sql, extras
 
 from queries.dim_modalities import get_modalities_list, insert_modalities, get_modalities_from_studies, \
     insert_modalities_template, get_dim_modalities, fix_names_template
+from sync.studies import SyncStudies
 from sync.sync_base import SyncBase
 from utils import first_true, combine_and_sort_dictionary_values
 
@@ -111,7 +112,7 @@ class SyncModalities(SyncBase):
 
     def retrieve_data(self):
         date = datetime.now()
-        last_sync = self.get_last_sync_date(self.TABLE_NAME)
+        last_sync = self.get_last_sync_date(SyncStudies.TABLE_NAME)
         last_sync_one_hour_ago = last_sync - timedelta(hours=1)
 
 

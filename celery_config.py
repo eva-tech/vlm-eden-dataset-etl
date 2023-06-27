@@ -1,6 +1,8 @@
 """Celey configuration file."""
 import os
 
+from celery.schedules import crontab
+
 accept_content = ["json"]
 broker_url = os.getenv("REDIS_URL")
 
@@ -21,5 +23,9 @@ beat_schedule = {
     "elt_task": {
         "task": "cron_tasks.run_etl",
         "schedule": 600  # every 10 minutes
+    },
+    "elt_validation_task": {
+        "task": "cron_tasks.fetch_no_synced_data",
+        "schedule": crontab(minute="0", hour="7")  # every day at 1am
     },
 }
