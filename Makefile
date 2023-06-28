@@ -69,3 +69,10 @@ reload:
 format:
 	docker-compose up -d celery_worker_intelligence
 	docker exec celery_worker_intelligence sh scripts/lint.sh
+testing:
+	git checkout testing
+	git fetch --all
+	git reset --hard origin/testing
+	git pull --rebase
+	@make down
+	@make up
