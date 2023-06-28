@@ -49,6 +49,11 @@ class SyncModalities(SyncBase):
                     tmp_modality["description"] = ",".join(
                         sorted([x for x in [data["description"] or "", tmp_modality["description"]] if x]))
 
+            if tmp_modality["identifier"] in [mod["identifier"] for mod in to_insert]:
+                """ If the modality is already in the list, skip it """
+                tmp_modality = empty_modality.copy()
+                continue
+
             if tmp_modality != empty_modality:
                 to_insert.append(tmp_modality)
                 tmp_modality = empty_modality.copy()
