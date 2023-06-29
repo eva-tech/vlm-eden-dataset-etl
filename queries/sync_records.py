@@ -1,3 +1,5 @@
+"""This file contains all the queries related to the sync_records table."""
+
 get_last_sync_date = """
     SELECT max(last_sync_date) FROM {schema}.sync_records where table_name=%(table_name)s;
 """

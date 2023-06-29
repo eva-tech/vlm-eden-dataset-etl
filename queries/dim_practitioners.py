@@ -1,3 +1,5 @@
+"""This file contains the queries for the dim_practitioners table."""
+
 get_all_practitioners = """
     SELECT pp.id,
            pu.name,
