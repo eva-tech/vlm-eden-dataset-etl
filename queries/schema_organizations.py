@@ -1,3 +1,5 @@
+"""This file contains all the queries related to the organizations schema."""
+
 organizations_with_product = """
     SELECT po.id,
            po.name,

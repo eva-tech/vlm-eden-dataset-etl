@@ -92,7 +92,7 @@ jobs:
 
       - name: Create Env File
         if: steps.cache.outputs.cache-hit != 'true'
-        run: printenv > config/.env
+        run: printenv > .env
 
       - name: Set up Docker Buildx
         if: steps.cache.outputs.cache-hit != 'true'
