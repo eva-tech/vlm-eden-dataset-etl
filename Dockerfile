@@ -26,6 +26,7 @@ FROM base AS staging-celery-beat
 FROM base AS production-celery-beat
 
 FROM base AS development-celery
+RUN pip3 install -r requirements-dev.txt
 ENTRYPOINT ["scripts/celery.sh"]
 
 FROM base AS development-flower

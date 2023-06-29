@@ -1,3 +1,5 @@
+"""This file contains all the queries related to the dim_practitioners table."""
+
 get_all_technicians = """
     select
         st.id as study_external_id, 
