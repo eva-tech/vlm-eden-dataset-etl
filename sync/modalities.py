@@ -85,6 +85,11 @@ class SyncModalities(SyncBase):
                         )
                     )
 
+            if tmp_modality["identifier"] in [mod["identifier"] for mod in to_insert]:
+                """If the modality is already in the list, skip it"""
+                tmp_modality = empty_modality.copy()
+                continue
+
             if tmp_modality != empty_modality:
                 to_insert.append(tmp_modality)
                 tmp_modality = empty_modality.copy()
