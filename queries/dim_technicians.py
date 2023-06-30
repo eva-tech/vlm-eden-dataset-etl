@@ -1,3 +1,5 @@
+"""This file contains all the queries related to the dim_practitioners table."""
+
 get_all_technicians = """
     select distinct string_agg(distinct nullif(trim(se.dicom_operators_name), ''), ',' order by nullif(trim(se.dicom_operators_name),'')) as name
     from pacs_studies as st

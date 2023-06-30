@@ -1,3 +1,5 @@
+"""This file contains all the queries related to the fact_studies table."""
+
 get_studies = """
     select distinct ps.id as external_id,
            ps.urgency_level,

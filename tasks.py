@@ -1,3 +1,4 @@
+"""This file contains the tasks that will be executed by celery."""
 from celery_app import app
 from sync.database_breach import DatabaseBridge
 from sync.facilities import SyncFacilities
@@ -10,7 +11,15 @@ from utils import get_schema_name
 
 
 @app.task
-def sync_data_from_by_organization(organization_id, organization_slug):
+def sync_data_from_by_organization(
+    organization_id: str, organization_slug: str
+) -> None:
+    """Sync data from source to destination database by organization.
+
+    :param organization_id:
+    :param organization_slug:
+    :return: None
+    """
     organization_data = OrganizationData(
         organization_id,
         get_schema_name(organization_slug),
@@ -36,7 +45,15 @@ def sync_data_from_by_organization(organization_id, organization_slug):
 
 
 @app.task
-def sync_pending_data_by_organization(organization_id, organization_slug):
+def sync_pending_data_by_organization(
+    organization_id: str, organization_slug: str
+) -> None:
+    """Sync pending data from source to destination database by organization.
+
+    :param organization_id:
+    :param organization_slug:
+    :return: None
+    """
     organization_data = OrganizationData(
         organization_id,
         get_schema_name(organization_slug),

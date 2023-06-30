@@ -1,3 +1,4 @@
+"""This file is used to run a worker for the celery app."""
 import socket
 
 from celery_app import app
