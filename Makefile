@@ -62,4 +62,10 @@ redis:
 stop:
 	docker-compose stop
 logs:
-	docker-compose logs -f --tail 100 celery_worker_intelligence flower
+	docker-compose logs -f --tail 100 celery_worker_intelligence flower postgres_intelligence
+reload:
+	@make stop
+	@make up
+format:
+	docker-compose up -d celery_worker_intelligence
+	docker exec celery_worker_intelligence sh scripts/lint.sh
