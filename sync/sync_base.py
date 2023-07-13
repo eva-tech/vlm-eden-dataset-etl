@@ -1,6 +1,6 @@
 """Base class for syncing data from source to destination database."""
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from psycopg2 import sql
 
@@ -50,4 +50,9 @@ class SyncBase:
         )
         self.destination_cursor.execute(sql_query, {"table_name": table_name})
         result = self.destination_cursor.fetchone()
-        return result["max"] or datetime(2019, 1, 1)
+        if result["max"]:
+            five_seconds = timedelta(seconds=5)
+            last_update = result["max"] - five_seconds
+        else:
+            last_update = datetime(2019, 1, 1)
+        return last_update

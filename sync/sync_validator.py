@@ -38,11 +38,19 @@ class SyncValidator(SyncBase):
         )
         data_studies_ids = cursor_destination.fetchall()
         ids = [data["external_id"] for data in data_studies_ids]
+        sql_query = get_studies_by_not_ids
+
+        if ids:
+            sql_query = sql.SQL(sql_query).format(
+                extra_filter=sql.SQL("and id not in %(ids)s")
+            )
+        else:
+            sql_query = sql.SQL(sql_query).format(extra_filter=sql.SQL(""))
 
         self.source_cursor.execute(
-            get_studies_by_not_ids,
+            sql_query,
             {
-                "ids": tuple(ids) or None,
+                "ids": tuple(ids),
                 "organization_id": self.organization_id,
                 "start_date": start_date,
                 "end_date": end_date,
