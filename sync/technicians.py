@@ -26,9 +26,14 @@ class SyncTechnicians(SyncBase):
             {"organization_id": self.organization_id, "date": last_sync},
         )
         data = self.source_cursor.fetchall()
-        sql_query = sql.SQL(insert_technicians).format(sql.Identifier(self.schema_name))
+        sql_query = sql.SQL(insert_technicians).format(
+            schema=sql.Identifier(self.schema_name)
+        )
+        template = sql.SQL(insert_technicians_template).format(
+            schema=sql.Identifier(self.schema_name)
+        )
         extras.execute_values(
-            self.destination_cursor, sql_query, data, template=insert_technicians_template, page_size=100
+            self.destination_cursor, sql_query, data, template=template, page_size=100
         )
 
         self.destination_conn.commit()

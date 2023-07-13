@@ -34,12 +34,12 @@ def sync_data_from_by_organization(
     sync_practitioners = SyncPractitioners(organization_data, bridge)
     sync_practitioners.retrieve_data()
 
+    sync_studies = SyncStudies(organization_data, bridge)
+    sync_studies.retrieve_data()
+
     # Pending to QA
     # sync_technicians = SyncTechnicians(organization_data, bridge)
     # sync_technicians.retrieve_data()
-
-    sync_studies = SyncStudies(organization_data, bridge)
-    sync_studies.retrieve_data()
 
     bridge.close_connections()
 
