@@ -17,6 +17,7 @@ get_modalities_from_studies = """
     from pacs_studies ps
     where ps.organization_id = %(organization_id)s
     and (ps.created_at >= (%(date)s)::timestamptz or ps.updated_at >= (%(date)s)::timestamptz)
+    group by ps.id
 """
 
 insert_modalities = """
