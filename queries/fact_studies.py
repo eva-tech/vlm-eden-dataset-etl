@@ -1,7 +1,7 @@
 """This file contains all the queries related to the fact_studies table."""
 
 get_studies = """
-    select ps.id as external_id,
+    select distinct on (ps.id) ps.id as external_id,
            ps.urgency_level,
            ps.status,
            pu.full_name as patient_full_name,
@@ -24,26 +24,13 @@ get_studies = """
     from pacs_studies ps
          left join pacs_facilities pf on ps.facility_id = pf.id
          left join pacs_patients pu on ps.patient_id = pu.id
-         left join (select id,
-                           study_id,
-                           signed_at,
-                           status,
-                           created_at,
-                           signed_by_id,
-                           updated_at,
-                           rank() over (partition by study_id order by created_at desc) as rank
-                    from pacs_reports
-                    where is_active
-                      and not deleted
-                      and organization_id=(%(organization_id)s)::uuid
-                      and (created_at > (%(date)s)::timestamptz)
-                    group by study_id, created_at, id
-                    order by created_at desc) pr on ps.id = pr.study_id and pr.rank = 1
+         left join pacs_reports pr on ps.id = pr.study_id and pr.is_active and not pr.deleted
     where ps.organization_id=(%(organization_id)s)::uuid 
     and (ps.created_at > (%(date)s)::timestamptz or ps.updated_at > (%(date)s)::timestamptz
-    or pr.updated_at > (%(date)s)::timestamptz)
+    or (pr.created_at > (%(date)s)::timestamptz or pr.updated_at > (%(date)s)::timestamptz))
     and ps.modalities != ''
     {extra_filter}
+    order by ps.id, pr.created_at desc
 """
 
 insert_studies = """
@@ -127,7 +114,7 @@ get_studies_by_date = """
 get_studies_by_not_ids = """
     select id
     from pacs_studies
-    where id not in %(ids)s
-    and organization_id=%(organization_id)s
+    where organization_id=%(organization_id)s
     and created_at::date between (%(start_date)s)::date and (%(end_date)s)::date
+    {extra_filter}
 """
