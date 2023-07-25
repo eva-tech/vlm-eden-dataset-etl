@@ -73,6 +73,7 @@ DO UPDATE SET
     calendar_sign_at_id = excluded.calendar_sign_at_id,
     calendar_birth_date_id = excluded.calendar_birth_date_id,
     modality_id = excluded.modality_id,
+    facility_id = excluded.facility_id,
     calendar_dicom_date_time_id = excluded.calendar_dicom_date_time_id,
     practitioner_id = excluded.practitioner_id,
     referring_practitioner_id = excluded.referring_practitioner_id,
