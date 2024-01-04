@@ -1,3 +1,3 @@
 #!/bin/sh
 
-celery -A cron_tasks flower & celery -A cron_tasks beat -l INFO
+celery -A cron_tasks flower --conf=./flower_config.py & celery -A cron_tasks beat -l INFO
