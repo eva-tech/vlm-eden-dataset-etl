@@ -1,3 +1,4 @@
+"""This file is used to run a worker for the celery app."""
 import socket
 
 from celery_app import app
@@ -8,7 +9,7 @@ if __name__ == "__main__":
     worker = app.Worker(
         hostname=f"{worker_key}@{socket.gethostname()}",
         queues=[],
-        optimization="fair",
+        optimization="default",
         detach=True,
         loglevel="DEBUG",
         concurrency=2,

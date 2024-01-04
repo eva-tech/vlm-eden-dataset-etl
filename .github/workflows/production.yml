@@ -1,8 +1,8 @@
-name: Staging
+name: Production
 
 on:
   push:
-    branches: [ staging ]
+    branches: [ main ]
 
 jobs:
   build-and-push-images:
@@ -16,17 +16,17 @@ jobs:
       - name: Store ENV from AWS SecretManager
         uses: say8425/aws-secrets-manager-actions@v2
         with:
-          AWS_ACCESS_KEY_ID: ${{ secrets.DEV__AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV__AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.DEV__AWS_REGION_NAME }}
-          SECRET_NAME: etl-intelligence-configuration/staging
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION_NAME }}
+          SECRET_NAME: etl-intelligence-configuration/production
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets.DEV__AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.DEV__AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.DEV__AWS_REGION_NAME }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION_NAME }}
 
       - name: Notify Deployment triggered
         uses: act10ns/slack@v1
@@ -81,17 +81,17 @@ jobs:
       - name: Store ENV from AWS SecretManager
         uses: say8425/aws-secrets-manager-actions@v2
         with:
-          AWS_ACCESS_KEY_ID: ${{ secrets.DEV__AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV__AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.DEV__AWS_REGION_NAME }}
-          SECRET_NAME: etl-intelligence-configuration/staging
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION_NAME }}
+          SECRET_NAME: etl-intelligence-configuration/production
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets.DEV__AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.DEV__AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.DEV__AWS_REGION_NAME }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION_NAME }}
 
       - name: Use AWS CLI
         uses: unfor19/install-aws-cli-action@v1
@@ -107,9 +107,9 @@ jobs:
       - name: Service Deployment
         env:
           SERVICE: ${{ matrix.service }}
-          REGION: ${{ secrets.DEV__AWS_REGION_NAME }}
+          REGION: ${{ secrets.AWS_REGION_NAME }}
         run: |
-          aws ecs update-service --cluster ECS-intelligence-staging --service $SERVICE --force-new-deployment
+          aws ecs update-service --cluster ECS-intelligence-prod --service $SERVICE --force-new-deployment
 
       - name: Notify Finish Service Deployment
         uses: act10ns/slack@v1

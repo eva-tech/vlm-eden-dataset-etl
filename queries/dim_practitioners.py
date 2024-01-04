@@ -1,18 +1,18 @@
+"""This file contains the queries for the dim_practitioners table."""
+
 get_all_practitioners = """
     SELECT pp.id,
-           pu.name,
-           pu.first_surname,
-           pu.last_surname,
-           pu.full_name,
+           pp.name,
+           pp.first_surname,
+           pp.last_surname,
+           pp.full_name,
            pp.status,
            pp.gender,
            pp.created_at,
            pp.updated_at
     FROM pacs_practitioners pp
-             JOIN pacs_users pu ON pp.user_id = pu.id
              WHERE pp.organization_id = %(organization_id)s
-             and (pp.created_at > (%(date)s)::timestamptz or pp.updated_at > (%(date)s)::timestamptz
-             or  pu.created_at > (%(date)s)::timestamptz or pu.updated_at > (%(date)s)::timestamptz)
+             and (pp.created_at > (%(date)s)::timestamptz or pp.updated_at > (%(date)s)::timestamptz)
 """
 
 insert_practitioners = """
