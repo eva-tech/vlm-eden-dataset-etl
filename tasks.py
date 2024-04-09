@@ -3,6 +3,7 @@ from celery_app import app
 from sync.database_breach import DatabaseBridge
 from sync.facilities import SyncFacilities
 from sync.modalities import SyncModalities
+from sync.organizations import SyncOrganizations
 from sync.practitioners import SyncPractitioners
 from sync.studies import SyncStudies
 from sync.sync_base import OrganizationData
@@ -25,6 +26,9 @@ def sync_data_from_by_organization(
         get_schema_name(organization_slug),
     )
     bridge = DatabaseBridge()
+
+    SyncOrganizations(bridge).retrieve_data()
+
     sync_facilities = SyncFacilities(organization_data, bridge)
     sync_facilities.retrieve_data()
 
@@ -60,3 +64,13 @@ def sync_pending_data_by_organization(
     )
     bridge = DatabaseBridge()
     SyncValidator(organization_data, bridge).retrieve_data()
+
+
+@app.task
+def sync_organizations() -> None:
+    """Sync data from source to destination database for organization.
+
+    :return: None
+    """
+    bridge = DatabaseBridge()
+    SyncOrganizations(bridge).retrieve_data()
