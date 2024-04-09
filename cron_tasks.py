@@ -3,6 +3,7 @@ This module handles ETL (Extract, Transform, Load) tasks for fetching and synchr
 
 It utilizes Celery for task scheduling and relies on other modules and tasks for specific functionalities.
 """
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -12,8 +13,32 @@ from yoyo import get_backend, read_migrations
 from celery_app import app
 from database import create_connection_to_destination, create_connection_to_source
 from queries.schema_organizations import create_schema, organizations_with_product
-from tasks import sync_data_from_by_organization, sync_pending_data_by_organization
+from tasks import (
+    sync_data_from_by_organization,
+    sync_organizations,
+    sync_pending_data_by_organization,
+)
 from utils import get_schema_name
+
+logger = logging.getLogger()
+
+
+def run_general_migrations():
+    """
+    Run database migrations using the yoyo library.
+
+    Reads migrations from the "./general_migrations/" directory and applies them to the destination database.
+    """
+    host_and_database = f"{os.getenv('DESTINATION_DATABASE_HOST')}/{os.getenv('DESTINATION_DATABASE_NAME')}"
+    user_and_password = f"{os.getenv('DESTINATION_DATABASE_USER')}:{os.getenv('DESTINATION_DATABASE_PASS')}"
+    destination_database = f"postgresql://{user_and_password}@{host_and_database}"
+    migrations = read_migrations("./general_migrations/")
+
+    conn_destination = create_connection_to_destination()
+    backend = get_backend(destination_database)
+    backend.apply_migrations(backend.to_apply(migrations))
+
+    conn_destination.close()
 
 
 def run_migrations():
@@ -69,6 +94,7 @@ def fetch_dim_data():
 
     Schedules the "sync_data_from_by_organization" Celery task for each organization.
     """
+    sync_organizations.delay()
     organizations = organization_with_intelligence()
     for organization in organizations:
         sync_data_from_by_organization.delay(organization["id"], organization["slug"])
@@ -94,10 +120,21 @@ def run_etl():
     Run the ETL process.
 
     - Loads environment variables from the .env file.
-    - Runs database migrations.
     - Fetches dimension data.
     """
     load_dotenv()
-    run_migrations()
-    print("ready migrations")
     fetch_dim_data()
+
+
+def apply_migrations():
+    """
+    Apply migrations to the destination database.
+
+    - Loads environment variables from the .env file.
+    - Runs database migrations.
+    """
+    logger.info("starting running migrations")
+    load_dotenv()
+    run_migrations()
+    run_general_migrations()
+    logger.info("finished running migrations")

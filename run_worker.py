@@ -2,6 +2,7 @@
 import socket
 
 from celery_app import app
+from cron_tasks import apply_migrations
 
 if __name__ == "__main__":
     print("starting worker")
@@ -15,4 +16,5 @@ if __name__ == "__main__":
         concurrency=2,
         max_tasks_per_child=10,
     )
+    apply_migrations()
     worker.start()
