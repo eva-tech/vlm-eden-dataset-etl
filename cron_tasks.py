@@ -11,7 +11,11 @@ from psycopg2 import extras
 from yoyo import get_backend, read_migrations
 
 from celery_app import app
-from database import create_connection_to_destination, create_connection_to_source
+from database import (
+    create_connection_to_destination,
+    create_connection_to_source,
+    run_general_migrations,
+)
 from queries.schema_organizations import create_schema, organizations_with_product
 from tasks import (
     sync_data_from_by_organization,
@@ -21,24 +25,6 @@ from tasks import (
 from utils import get_schema_name
 
 logger = logging.getLogger()
-
-
-def run_general_migrations():
-    """
-    Run database migrations using the yoyo library.
-
-    Reads migrations from the "./general_migrations/" directory and applies them to the destination database.
-    """
-    host_and_database = f"{os.getenv('DESTINATION_DATABASE_HOST')}/{os.getenv('DESTINATION_DATABASE_NAME')}"
-    user_and_password = f"{os.getenv('DESTINATION_DATABASE_USER')}:{os.getenv('DESTINATION_DATABASE_PASS')}"
-    destination_database = f"postgresql://{user_and_password}@{host_and_database}"
-    migrations = read_migrations("./general_migrations/")
-
-    conn_destination = create_connection_to_destination()
-    backend = get_backend(destination_database)
-    backend.apply_migrations(backend.to_apply(migrations))
-
-    conn_destination.close()
 
 
 def run_migrations():
@@ -123,6 +109,7 @@ def run_etl():
     - Fetches dimension data.
     """
     load_dotenv()
+    run_migrations()
     fetch_dim_data()
 
 
@@ -135,6 +122,5 @@ def apply_migrations():
     """
     logger.info("starting running migrations")
     load_dotenv()
-    run_migrations()
     run_general_migrations()
     logger.info("finished running migrations")

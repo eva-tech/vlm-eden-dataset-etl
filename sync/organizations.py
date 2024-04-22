@@ -7,6 +7,7 @@ from queries.schema_organizations import (
     insert_organizations,
     insert_organizations_template,
 )
+from sync.constants import BATCH_1000
 from sync.database_breach import DatabaseBridge
 
 
@@ -32,6 +33,6 @@ class SyncOrganizations:
             sql_query,
             data,
             template=insert_organizations_template,
-            page_size=1000,
+            page_size=BATCH_1000,
         )
         self.destination_conn.commit()

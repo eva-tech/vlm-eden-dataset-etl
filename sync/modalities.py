@@ -13,6 +13,7 @@ from queries.dim_modalities import (
     insert_modalities,
     insert_modalities_template,
 )
+from sync.constants import BATCH_100
 from sync.studies import SyncStudies
 from sync.sync_base import SyncBase
 from utils import combine_and_sort_dictionary_values
@@ -103,7 +104,7 @@ class SyncModalities(SyncBase):
                 sql_query,
                 to_insert,
                 template=insert_modalities_template,
-                page_size=100,
+                page_size=BATCH_100,
             )
 
         self.destination_conn.commit()
@@ -124,7 +125,7 @@ class SyncModalities(SyncBase):
             sql_query,
             data_modalities,
             template=insert_modalities_template,
-            page_size=100,
+            page_size=BATCH_100,
         )
         self.destination_conn.commit()
 
@@ -171,7 +172,7 @@ class SyncModalities(SyncBase):
             sql_query,
             current_modalities,
             template=fix_names_template,
-            page_size=100,
+            page_size=BATCH_100,
         )
         self.destination_conn.commit()
 
