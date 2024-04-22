@@ -5,6 +5,7 @@ from typing import List
 from psycopg2 import extras, sql
 
 from queries.fact_studies import get_studies, insert_studies, insert_studies_template
+from sync.constants import BATCH_200
 from sync.sync_base import SyncBase
 
 
@@ -35,7 +36,7 @@ class SyncStudies(SyncBase):
             sql_query,
             data_studies,
             template=template,
-            page_size=200,
+            page_size=BATCH_200,
         )
 
         self.destination_conn.commit()
@@ -70,7 +71,7 @@ class SyncStudies(SyncBase):
             sql_query,
             data_studies,
             template=template,
-            page_size=200,
+            page_size=BATCH_200,
         )
 
         self.destination_conn.commit()

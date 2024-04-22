@@ -8,6 +8,7 @@ from queries.dim_facitities import (
     insert_facilities,
     insert_facilities_template,
 )
+from sync.constants import BATCH_1000
 from sync.sync_base import SyncBase
 
 
@@ -32,7 +33,7 @@ class SyncFacilities(SyncBase):
             sql_query,
             data,
             template=insert_facilities_template,
-            page_size=1000,
+            page_size=BATCH_1000,
         )
 
         self.destination_conn.commit()

@@ -3,6 +3,7 @@ This module handles ETL (Extract, Transform, Load) tasks for fetching and synchr
 
 It utilizes Celery for task scheduling and relies on other modules and tasks for specific functionalities.
 """
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -10,10 +11,20 @@ from psycopg2 import extras
 from yoyo import get_backend, read_migrations
 
 from celery_app import app
-from database import create_connection_to_destination, create_connection_to_source
+from database import (
+    create_connection_to_destination,
+    create_connection_to_source,
+    run_general_migrations,
+)
 from queries.schema_organizations import create_schema, organizations_with_product
-from tasks import sync_data_from_by_organization, sync_pending_data_by_organization
+from tasks import (
+    sync_data_from_by_organization,
+    sync_organizations,
+    sync_pending_data_by_organization,
+)
 from utils import get_schema_name
+
+logger = logging.getLogger()
 
 
 def run_migrations():
@@ -69,6 +80,7 @@ def fetch_dim_data():
 
     Schedules the "sync_data_from_by_organization" Celery task for each organization.
     """
+    sync_organizations.delay()
     organizations = organization_with_intelligence()
     for organization in organizations:
         sync_data_from_by_organization.delay(organization["id"], organization["slug"])
@@ -94,10 +106,21 @@ def run_etl():
     Run the ETL process.
 
     - Loads environment variables from the .env file.
-    - Runs database migrations.
     - Fetches dimension data.
     """
     load_dotenv()
     run_migrations()
-    print("ready migrations")
     fetch_dim_data()
+
+
+def apply_migrations():
+    """
+    Apply migrations to the destination database.
+
+    - Loads environment variables from the .env file.
+    - Runs database migrations.
+    """
+    logger.info("starting running migrations")
+    load_dotenv()
+    run_general_migrations()
+    logger.info("finished running migrations")

@@ -8,6 +8,7 @@ from queries.dim_practitioners import (
     insert_practitioners,
     insert_practitioners_template,
 )
+from sync.constants import BATCH_100
 from sync.sync_base import SyncBase
 
 
@@ -34,7 +35,7 @@ class SyncPractitioners(SyncBase):
             sql_query,
             data_practitioners,
             template=insert_practitioners_template,
-            page_size=100,
+            page_size=BATCH_100,
         )
         self.destination_conn.commit()
 
