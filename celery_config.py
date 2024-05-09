@@ -25,4 +25,8 @@ beat_schedule = {
         "task": "cron_tasks.fetch_no_synced_data",
         "schedule": crontab(minute="0", hour="7"),  # every day at 1am
     },
+    "sync_organizations_task": {
+        "task": "cron_tasks.sync_organizations_task",
+        "schedule": crontab(minute="0", hour="6"),  # every day at 12am
+    },
 }
