@@ -80,7 +80,6 @@ def fetch_dim_data():
 
     Schedules the "sync_data_from_by_organization" Celery task for each organization.
     """
-    sync_organizations.delay()
     organizations = organization_with_intelligence()
     for organization in organizations:
         sync_data_from_by_organization.delay(organization["id"], organization["slug"])
@@ -124,3 +123,15 @@ def apply_migrations():
     load_dotenv()
     run_general_migrations()
     logger.info("finished running migrations")
+
+
+@app.task
+def sync_organizations_task():
+    """
+    Synchronize organizations.
+
+    - Loads environment variables from the .env file.
+    - Schedules the "sync_organizations" Celery task.
+    """
+    load_dotenv()
+    sync_organizations.delay()
