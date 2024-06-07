@@ -27,8 +27,6 @@ def sync_data_from_by_organization(
     )
     bridge = DatabaseBridge()
 
-    SyncOrganizations(bridge).retrieve_data()
-
     sync_facilities = SyncFacilities(organization_data, bridge)
     sync_facilities.retrieve_data()
 
