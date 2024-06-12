@@ -13,7 +13,7 @@ if __name__ == "__main__":
     logger.info("starting worker")
     load_dotenv()
     sentry_sdk.init(
-        dsn=os.getenv("SENTRY_DSN"),
+        dsn=os.getenv("SENTRY_DNS"),
         traces_sample_rate=1.0,
         profiles_sample_rate=1.0,
     )
