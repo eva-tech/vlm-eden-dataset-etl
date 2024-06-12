@@ -5,6 +5,28 @@ on:
     branches: [ develop ]
 
 jobs:
+  set-up-before-build:
+    runs-on: ubuntu-latest
+    environment: develop
+    steps:
+      - name: Cancel previous workflows
+        uses: styfle/cancel-workflow-action@0.11.0
+        with:
+          workflow_id: ${{ github.event.workflow.id }}
+
+      - name: Checkout
+        uses: actions/checkout@v3.3.0
+
+      - name: pull-request
+        id: open-pr
+        uses: repo-sync/pull-request@v2
+        with:
+          destination_branch: "staging"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_title: "[Release] - Updates Staging with develop"
+          pr_body: "- Release staging <- develop"
+          pr_assignee: "IvanDiazNoriega,xleninx"
+          pr_label: "auto-pr,release"
   build-and-push-images:
     runs-on: ubuntu-latest
     steps:

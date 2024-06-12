@@ -5,6 +5,51 @@ on:
     branches: [ staging ]
 
 jobs:
+  set-up-before-build:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Cancel previous workflows
+        uses: styfle/cancel-workflow-action@0.11.0
+        with:
+          workflow_id: ${{ github.event.workflow.id }}
+
+      - name: Checkout
+        uses: actions/checkout@v3.3.0
+
+      - name: Get latest Release Tag
+        id: last_release
+        uses: InsonusK/get-latest-release@v1.0.1
+        with:
+          myToken: ${{ secrets.GITHUB_TOKEN }}
+          exclude_types: "draft|prerelease"
+          view_top: 1
+
+      - name: Set tag version
+        id: set_tag_version
+        run: |
+          echo "tag_name: ${{ steps.last_release.outputs.tag_name }}"
+          export SEMANTIC_RELEASE_NAME=${{ steps.last_release.outputs.tag_name }}
+          SEMANTIC_RELEASE_NAME="${SEMANTIC_RELEASE_NAME:1}"
+          echo "semantic_release=$(echo ${SEMANTIC_RELEASE_NAME})" >> $GITHUB_OUTPUT
+
+      - name: Increase Release Tag Version
+        id: bump_version
+        uses: christian-draeger/increment-semantic-version@1.0.2
+        with:
+          current-version: ${{steps.set_tag_version.outputs.semantic_release}}
+          version-fragment: 'feature'
+
+      - name: open-new-pr-to-main
+        id: open-new-pr-to-main
+        uses: repo-sync/pull-request@v2
+        with:
+          destination_branch: "main"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_title: "Release v${{ steps.bump_version.outputs.next-version }}"
+          pr_body: "- Release v${{ steps.bump_version.outputs.next-version }}"
+          pr_assignee: "IvanDiazNoriega,xleninx"
+          pr_label: "auto-pr,release"
   build-and-push-images:
     runs-on: ubuntu-latest
     steps:
