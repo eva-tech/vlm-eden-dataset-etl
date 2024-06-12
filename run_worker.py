@@ -1,11 +1,22 @@
 """This file is used to run a worker for the celery app."""
+import os
 import socket
+
+import sentry_sdk
+from dotenv import load_dotenv
 
 from celery_app import app
 from cron_tasks import apply_migrations
 
 if __name__ == "__main__":
-    print("starting worker")
+    logger = app.logger
+    logger.info("starting worker")
+    load_dotenv()
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
     worker_key = "default"
     worker = app.Worker(
         hostname=f"{worker_key}@{socket.gethostname()}",
