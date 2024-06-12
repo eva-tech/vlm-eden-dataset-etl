@@ -1,6 +1,10 @@
 """Flower configuration file."""
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 BROKER_URL = os.getenv("BROKER_URL")
 FLOWER_USER = os.getenv("FLOWER_USER")
 FLOWER_PASSWORD = os.getenv("FLOWER_PASSWORD")
