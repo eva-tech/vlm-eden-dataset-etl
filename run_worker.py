@@ -9,7 +9,7 @@ from celery_app import app
 from cron_tasks import apply_migrations
 
 if __name__ == "__main__":
-    logger = app.logger
+    logger = logging.getLogger(__name__)
     logger.info("starting worker")
     load_dotenv()
     sentry_sdk.init(
