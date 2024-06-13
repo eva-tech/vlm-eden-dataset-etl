@@ -1,4 +1,5 @@
 """This file is used to run a worker for the celery app."""
+import logging
 import os
 import socket
 
