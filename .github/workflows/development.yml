@@ -71,7 +71,7 @@ jobs:
       - name: Build Images
         id: build-images-intelligence
         run: |
-          docker-compose -f docker-compose.yml build
+          docker compose -f docker-compose.yml build
       - name: Deletes Images
         id: delete-images
         env:
@@ -86,8 +86,8 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ env.IMAGE_TAG_NAME }}
         run: |
-          docker-compose -f docker-compose.yml push celery_worker_intelligence
-          docker-compose -f docker-compose.yml push flower
+          docker compose -f docker-compose.yml push celery_worker_intelligence
+          docker compose -f docker-compose.yml push flower
 
   deploy:
     runs-on: ubuntu-latest
