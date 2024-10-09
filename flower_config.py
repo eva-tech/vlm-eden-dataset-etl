@@ -36,5 +36,6 @@ basic_auth = [f"{FLOWER_USER}:{FLOWER_PASSWORD}"]
 purge_offline_workers = 60
 cookie_secret = SECRET_KEY
 url_prefix = "flower"
+db = "/var/lib/flower/flower.db"
 max_tasks = 100000
 tasks_columns = ",".join(flower_columns)
