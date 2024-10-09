@@ -19,6 +19,8 @@ COPY . /intelligence
 
 RUN chmod +x /intelligence/scripts/*.sh
 
+RUN mkdir -p /var/lib/flower
+
 FROM base AS development
 
 FROM base AS development-celery-beat
