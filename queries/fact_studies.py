@@ -15,6 +15,7 @@ get_studies = """
            array_to_string(ARRAY(select unnest(string_to_array(ps.modalities, ',')) order by 1), ',') as identifier,
            ps.practitioner_id,
            ps.referring_practitioner_id,
+           ps.radiologist_technician_id,
            pr.signed_by_id,
            ps.patient_id,
            pu.gender,
@@ -56,7 +57,8 @@ INSERT INTO {schema}.fact_studies (
     calendar_id,
     practitioner_id,
     referring_practitioner_id,
-    signed_by_id
+    signed_by_id,
+    radiologist_technician_id
 ) VALUES %s
 ON CONFLICT (external_id) 
 DO UPDATE SET 
@@ -77,7 +79,8 @@ DO UPDATE SET
     calendar_dicom_date_time_id = excluded.calendar_dicom_date_time_id,
     practitioner_id = excluded.practitioner_id,
     referring_practitioner_id = excluded.referring_practitioner_id,
-    signed_by_id = excluded.signed_by_id;
+    signed_by_id = excluded.signed_by_id,
+    radiologist_technician_id = excluded.radiologist_technician_id;
 """
 
 insert_studies_template = """
@@ -103,7 +106,8 @@ insert_studies_template = """
         (select date_dim_id from {schema}.dim_calendar dc where date_actual = (%(created_at)s AT TIME ZONE %(facility_timezone)s)::date),
         (select id from {schema}.dim_practitioners where external_id = %(practitioner_id)s),
         (select id from {schema}.dim_practitioners where external_id = %(referring_practitioner_id)s),
-        (select id from {schema}.dim_practitioners where external_id = %(signed_by_id)s)
+        (select id from {schema}.dim_practitioners where external_id = %(signed_by_id)s),
+        (select id from {schema}.dim_practitioners where external_id = %(radiologist_technician_id)s)
     )
 """
 
