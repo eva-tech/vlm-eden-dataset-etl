@@ -44,6 +44,7 @@ class SyncModalities(SyncBase):
             "id": "",
             "name": "",
             "name_es": "",
+            "name_pt": "",
             "identifier": "",
             "description": "",
             "created_at": datetime.now(),
@@ -57,6 +58,9 @@ class SyncModalities(SyncBase):
                     tmp_modality["id"] = str(uuid.uuid4())
                     tmp_modality["name_es"] = combine_and_sort_dictionary_values(
                         data, tmp_modality, ["name_es", "name"]
+                    )
+                    tmp_modality["name_pt"] = combine_and_sort_dictionary_values(
+                        data, tmp_modality, ["name_pt", "name"]
                     )
                     tmp_modality["name"] = combine_and_sort_dictionary_values(
                         data, tmp_modality, ["name", "identifier"]
@@ -116,6 +120,7 @@ class SyncModalities(SyncBase):
         """Sync original modalities."""
         for modality in data_modalities:
             modality["name_es"] = modality["name_es"] or modality["name"]
+            modality["name_pt"] = modality["name_pt"] or modality["name"]
             modality["name"] = modality["name"] or modality["identifier"]
         sql_query = sql.SQL(insert_modalities).format(
             schema=sql.Identifier(self.schema_name)
@@ -130,7 +135,7 @@ class SyncModalities(SyncBase):
         self.destination_conn.commit()
 
     def sync_names(self, current_modalities, data_modalities):
-        """Sync names so that if a name or name_es value is updated in the original modalities.
+        """Sync names so that if a name, name_es, or name_pt value is updated in the original modalities.
 
         the name and name_es columns for modalities
         that contain that original modality are also updated.
@@ -139,6 +144,7 @@ class SyncModalities(SyncBase):
             "id": "",
             "name": "",
             "name_es": "",
+            "name_pt": "",
             "identifier": "",
             "description": "",
             "created_at": datetime.now(),
@@ -153,15 +159,22 @@ class SyncModalities(SyncBase):
                         tmp_modality["name_es"] = combine_and_sort_dictionary_values(
                             data, tmp_modality, ["name_es", "name"]
                         )
+                        tmp_modality["name_pt"] = combine_and_sort_dictionary_values(
+                            data, tmp_modality, ["name_pt", "name"]
+                        )
                         tmp_modality["name"] = combine_and_sort_dictionary_values(
                             data, tmp_modality, ["name", "identifier"]
                         )
                 modality["name_es"] = tmp_modality["name_es"]
+                modality["name_pt"] = tmp_modality["name_pt"]
                 modality["name"] = tmp_modality["name"]
                 tmp_modality = empty_modality.copy()
             else:
                 modality["name_es"] = (
                     modality["name_es"] or modality["name"] or modality["identifier"]
+                )
+                modality["name_pt"] = (
+                    modality["name_pt"] or modality["name"] or modality["identifier"]
                 )
                 modality["name"] = modality["name"] or modality["identifier"]
         sql_query = sql.SQL(insert_modalities).format(
