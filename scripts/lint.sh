@@ -1,3 +1,4 @@
+#!/bin/sh
 {
   echo "Executing autoflake"
   python3 -m autoflake --ignore-init-module-imports \
