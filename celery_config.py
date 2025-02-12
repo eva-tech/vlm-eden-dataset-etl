@@ -1,4 +1,5 @@
 """Celey configuration file."""
+
 import os
 
 from celery.schedules import crontab
