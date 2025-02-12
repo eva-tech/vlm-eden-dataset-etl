@@ -1,4 +1,5 @@
 """Queries for the dim_modalities table."""
+
 get_modalities_list = """
     SELECT 
         id,
