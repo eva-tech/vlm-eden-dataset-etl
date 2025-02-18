@@ -3,6 +3,7 @@ This module handles ETL (Extract, Transform, Load) tasks for fetching and synchr
 
 It utilizes Celery for task scheduling and relies on other modules and tasks for specific functionalities.
 """
+
 import logging
 import os
 

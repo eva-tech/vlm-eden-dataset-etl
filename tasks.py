@@ -1,4 +1,5 @@
 """This file contains the tasks that will be executed by celery."""
+
 from celery_app import app
 from sync.database_breach import DatabaseBridge
 from sync.facilities import SyncFacilities

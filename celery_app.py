@@ -3,6 +3,7 @@ This module configures the Celery application to handle asynchronous tasks.
 
 It utilizes the Celery library and loads environment variables from a .env file.
 """
+
 from celery import Celery
 from dotenv import load_dotenv
 

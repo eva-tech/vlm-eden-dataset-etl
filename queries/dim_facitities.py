@@ -1,4 +1,5 @@
 """This file contains all the queries related to the dim_facilities table."""
+
 get_all_facilities = """
     SELECT distinct pf.id,
        pf.name,
