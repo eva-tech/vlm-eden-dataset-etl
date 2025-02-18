@@ -1,4 +1,5 @@
 """Sync Validator module."""
+
 from datetime import datetime, timedelta
 
 from psycopg2 import extras, sql

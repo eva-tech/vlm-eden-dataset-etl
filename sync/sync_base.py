@@ -1,4 +1,5 @@
 """Base class for syncing data from source to destination database."""
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 

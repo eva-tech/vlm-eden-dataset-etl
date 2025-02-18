@@ -1,4 +1,5 @@
 """Syncs practitioner data from source to destination."""
+
 from datetime import datetime
 
 from psycopg2 import extras, sql

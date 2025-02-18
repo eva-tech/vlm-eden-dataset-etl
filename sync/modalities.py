@@ -1,4 +1,5 @@
 """Sync modalities from source to destination database."""
+
 import uuid
 from datetime import datetime, timedelta
 from typing import List

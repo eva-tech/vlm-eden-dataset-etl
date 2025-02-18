@@ -1,4 +1,5 @@
 """Sync studies from source to destination."""
+
 from datetime import datetime
 from typing import List
 
