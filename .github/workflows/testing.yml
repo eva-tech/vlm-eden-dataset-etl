@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@v2
       - name: Cache register
         id: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: /tmp/core_image.tar
           key: ${{ runner.os }}-buildx-${{ hashFiles('**/Dockerfile','**/requirements.txt') }}
