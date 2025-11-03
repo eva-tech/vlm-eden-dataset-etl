@@ -1,47 +1,44 @@
 # VLM Eden Dataset ETL System
 
-An ETL (Extract, Transform, Load) system built with Python and Celery that synchronizes medical/radiology data from a source PostgreSQL database to a destination data warehouse, with a specialized pipeline for extracting chest DICOM images and reports to S3.
+A specialized ETL system built with Python and Celery that extracts chest DICOM images and reports from a source PostgreSQL database and uploads them to AWS S3 for Vision Language Model (VLM) dataset creation.
 
 ## Overview
 
-This system consists of two main components:
+This system extracts eligible chest DICOM studies based on specific criteria and uploads them to S3 with organized metadata, reports, and DICOM files.
 
-1. **Standard ETL Pipeline**: Syncs dimension and fact tables from source to destination PostgreSQL databases
-2. **DICOM Extraction Pipeline**: Extracts chest DICOM images and reports for specific doctors and uploads them to AWS S3
+### Key Features
+
+- **Automated Discovery**: Identifies eligible chest studies based on doctor rankings and study criteria
+- **S3 Integration**: Organized file storage in S3 with structured metadata
+- **Parallel Processing**: Celery groups for parallel study processing
+- **Error Handling**: Robust error handling and logging
+- **Scheduled Tasks**: Automated discovery and processing via Celery Beat
 
 ## Architecture
 
-### Standard ETL Components
-
-- **Celery Tasks**: Asynchronous task execution for data synchronization
-- **Sync Modules**: Modular classes for syncing different data types (facilities, modalities, practitioners, studies)
-- **Query Layer**: SQL queries organized by entity type
-- **Database Bridge**: Manages connections to source and destination databases
-- **Migration System**: Uses yoyo for database schema migrations
-
 ### DICOM Extraction Pipeline
 
-The DICOM extraction pipeline is a standalone system that:
+The DICOM extraction pipeline:
 
 - Discovers eligible chest studies (CR/DX modalities) signed by doctors ranked 2-6
 - Extracts DICOM image files and associated reports
-- Uploads data to S3 bucket `s3-vlms-datasets` with organized structure
+- Uploads data to S3 bucket `s3-bucket-name` with organized structure
+- Tracks processing status and errors
 
-## Features
+### Components
 
-- **Incremental Sync**: Tracks last sync dates to process only changed records
-- **Multi-tenant**: Organization-specific schemas in destination database
-- **Scheduled Tasks**: Automated ETL runs via Celery Beat
-- **Error Handling**: Robust error handling and logging
-- **Parallel Processing**: Celery groups for parallel study processing
-- **S3 Integration**: Organized file storage in S3 with metadata
+- **Celery Tasks**: Asynchronous task execution for DICOM extraction
+- **DICOM Pipeline**: Core extraction and processing logic
+- **S3 Service**: Handles file uploads to S3 with organized structure
+- **Database Bridge**: Manages connections to source database
+- **Query Layer**: SQL queries for discovering eligible studies
 
 ## Prerequisites
 
 - Python 3.10+
-- PostgreSQL databases (source and destination)
+- PostgreSQL database (source database with PACS data)
 - Redis (for Celery broker and result backend)
-- AWS S3 bucket access (for DICOM extraction pipeline)
+- AWS S3 bucket access
 - Docker and Docker Compose (for local development)
 
 ## Installation
@@ -65,19 +62,12 @@ Create a `.env` file with the following variables:
 
 #### Database Configuration
 ```env
-# Source Database
+# Source Database (PACS database)
 SOURCE_DATABASE_NAME=your_source_db
 SOURCE_DATABASE_USER=your_source_user
 SOURCE_DATABASE_PASS=your_source_password
 SOURCE_DATABASE_HOST=your_source_host
 SOURCE_DATABASE_PORT=5432
-
-# Destination Database
-DESTINATION_DATABASE_NAME=your_dest_db
-DESTINATION_DATABASE_USER=your_dest_user
-DESTINATION_DATABASE_PASS=your_dest_password
-DESTINATION_DATABASE_HOST=your_dest_host
-DESTINATION_DATABASE_PORT=5432
 ```
 
 #### Redis Configuration
@@ -85,12 +75,12 @@ DESTINATION_DATABASE_PORT=5432
 REDIS_URL=redis://localhost:6379/0
 ```
 
-#### AWS S3 Configuration (for DICOM pipeline)
+#### AWS S3 Configuration
 ```env
 AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_REGION_NAME=us-east-1
-S3_BUCKET_NAME=s3-vlms-datasets
+S3_BUCKET_NAME=s3-bucket-name
 ```
 
 #### Other Configuration
@@ -106,7 +96,7 @@ LOGGING_LEVEL=INFO
 
 ```bash
 # Initialize and start all services
-make init
+make up
 
 # Or manually:
 docker-compose up -d
@@ -119,44 +109,6 @@ This will start:
 - Flower (task monitoring)
 
 ## Usage
-
-### Standard ETL Tasks
-
-#### Manual Task Execution
-
-You can trigger tasks manually using Python:
-
-```python
-from tasks import (
-    sync_data_from_by_organization,
-    sync_organizations,
-    sync_pending_data_by_organization,
-)
-
-# Sync data for a specific organization
-sync_data_from_by_organization.delay(
-    organization_id="uuid-here",
-    organization_slug="organization-slug"
-)
-
-# Sync organizations
-sync_organizations.delay()
-
-# Sync pending data for an organization
-sync_pending_data_by_organization.delay(
-    organization_id="uuid-here",
-    organization_slug="organization-slug"
-)
-```
-
-#### Scheduled Tasks
-
-The following tasks run automatically via Celery Beat:
-
-- **ETL Task**: Every 10 minutes - runs full ETL process
-- **Validation Task**: Daily at 7 AM - syncs pending data
-- **Organizations Sync**: Daily at 6 AM - syncs organization data
-- **DICOM Discovery**: Daily at 2 AM - discovers and queues chest DICOM studies
 
 ### DICOM Extraction Pipeline
 
@@ -217,12 +169,18 @@ study_ids = ["uuid1", "uuid2", "uuid3"]
 result = process_study_batch_to_s3.delay(study_ids)
 ```
 
+#### Scheduled Tasks
+
+The following task runs automatically via Celery Beat:
+
+- **DICOM Discovery**: Daily at 2 AM - discovers and queues chest DICOM studies
+
 #### S3 Structure
 
 Files are organized in S3 with the following structure:
 
 ```
-s3-vlms-datasets/
+s3-bucket-name/
 └── {organization_id}/
     └── {study_id}/
         ├── metadata.json          # Study metadata
@@ -233,16 +191,6 @@ s3-vlms-datasets/
                 ├── {instance_number:04d}_{image_id}.dcm
                 └── ...
 ```
-
-#### Query Structure
-
-The pipeline uses two main queries:
-
-1. **Doctor Ranking Query**: Identifies doctors ranked by total signed chest studies
-2. **Eligible Studies Query**: Finds studies matching:
-   - Signed by doctors ranked 2-6
-   - CR or DX modalities
-   - Chest body part (various language variations)
 
 ## Monitoring
 
@@ -264,7 +212,7 @@ View logs using Docker Compose:
 make logs
 
 # Or directly:
-docker-compose logs -f celery_worker_intelligence
+docker-compose logs -f celery_worker
 ```
 
 ### Task Status
@@ -276,40 +224,22 @@ Check task results in Redis or via Flower dashboard.
 ```
 vlm-eden-dataset-etl/
 ├── celery_app.py              # Celery application configuration
-├── celery_config.py            # Celery task scheduling
-├── cron_tasks.py              # Scheduled ETL tasks
+├── celery_config.py           # Celery task scheduling
 ├── database.py                # Database connection utilities
+├── run_worker.py              # Celery worker entry point
 ├── tasks.py                   # Celery task definitions
-├── utils.py                   # Utility functions
-├── queries/                   # SQL queries organized by entity
-│   ├── chest_dicom_studies.py # DICOM extraction queries
-│   ├── dim_facitities.py
-│   ├── dim_modalities.py
-│   ├── dim_practitioners.py
-│   ├── dim_technicians.py
-│   ├── fact_studies.py
-│   ├── schema_organizations.py
-│   └── sync_records.py
-├── sync/                      # Sync modules
-│   ├── constants.py
-│   ├── database_breach.py    # Database connection bridge
-│   ├── dicom_pipeline.py     # DICOM extraction pipeline
-│   ├── facilities.py
-│   ├── modalities.py
-│   ├── organizations.py
-│   ├── practitioners.py
-│   ├── studies.py
-│   ├── sync_base.py          # Base sync class
-│   ├── sync_validator.py
-│   └── s3_service.py         # S3 upload service
-├── migrations/               # Organization-specific migrations
-├── general_migrations/        # General migrations
-├── scripts/                  # Shell scripts
-├── docker-compose.yml        # Docker Compose configuration
-├── Dockerfile               # Docker image definition
-├── Makefile                 # Make commands
-├── requirements.txt         # Python dependencies
-└── README.md               # This file
+├── queries/                   # SQL queries
+│   └── chest_dicom_studies.py # DICOM extraction queries
+├── sync/                      # Core modules
+│   ├── database_breach.py     # Database connection bridge
+│   ├── dicom_pipeline.py      # DICOM extraction pipeline
+│   └── s3_service.py          # S3 upload service
+├── scripts/                   # Shell scripts
+├── docker-compose.yml         # Docker Compose configuration
+├── Dockerfile                 # Docker image definition
+├── Makefile                   # Make commands
+├── requirements.txt           # Python dependencies
+└── README.md                  # This file
 ```
 
 ## Development
@@ -332,17 +262,10 @@ make logs
 
 ### Code Structure
 
-- Follow existing patterns in sync modules
-- Use `SyncBase` for database-based sync operations
-- Queries go in `queries/` directory
 - Tasks are defined in `tasks.py` and decorated with `@app.task`
-
-### Adding New Sync Types
-
-1. Create query module in `queries/`
-2. Create sync class in `sync/` inheriting from `SyncBase`
-3. Add task in `tasks.py`
-4. Update main sync task if needed
+- DICOM extraction logic is in `sync/dicom_pipeline.py`
+- SQL queries for study discovery are in `queries/chest_dicom_studies.py`
+- S3 upload logic is in `sync/s3_service.py`
 
 ## Troubleshooting
 
@@ -351,14 +274,14 @@ make logs
 #### Database Connection Errors
 
 - Verify database credentials in `.env`
-- Check network connectivity to database servers
+- Check network connectivity to database server
 - Ensure PostgreSQL is accepting connections
 
 #### S3 Upload Failures
 
 - Verify AWS credentials in `.env`
 - Check S3 bucket permissions
-- Ensure bucket exists: `s3-vlms-datasets`
+- Ensure bucket exists: `s3-bucket-name`
 
 #### Celery Tasks Not Running
 
