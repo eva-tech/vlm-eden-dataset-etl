@@ -21,15 +21,6 @@ timezone = "America/Mexico_City"
 enable_utc = True
 
 beat_schedule = {
-    "elt_task": {"task": "cron_tasks.run_etl", "schedule": 600},  # every 10 minutes
-    "elt_validation_task": {
-        "task": "cron_tasks.fetch_no_synced_data",
-        "schedule": crontab(minute="0", hour="7"),  # every day at 1am
-    },
-    "sync_organizations_task": {
-        "task": "cron_tasks.sync_organizations_task",
-        "schedule": crontab(minute="0", hour="6"),  # every day at 12am
-    },
     "discover_chest_dicom_studies": {
         "task": "tasks.discover_chest_dicom_studies",
         "schedule": crontab(minute="0", hour="2"),  # every day at 2am
