@@ -30,4 +30,8 @@ beat_schedule = {
         "task": "cron_tasks.sync_organizations_task",
         "schedule": crontab(minute="0", hour="6"),  # every day at 12am
     },
+    "discover_chest_dicom_studies": {
+        "task": "tasks.discover_chest_dicom_studies",
+        "schedule": crontab(minute="0", hour="2"),  # every day at 2am
+    },
 }
