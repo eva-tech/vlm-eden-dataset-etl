@@ -1,15 +1,16 @@
 # VLM Eden Dataset ETL System
 
-A specialized ETL system built with Python and Celery that extracts chest DICOM images and reports from a source PostgreSQL database and uploads them to AWS S3 for Vision Language Model (VLM) dataset creation.
+A specialized ETL system built with Python and Celery that extracts chest DICOM images and reports from a source PostgreSQL database, copies them from AWS S3 origin bucket to Google Cloud Storage (GCS) GCS_DESTINATION_BUCKET_NAME bucket for Vision Language Model (VLM) dataset creation.
 
 ## Overview
 
-This system extracts eligible chest DICOM studies based on specific criteria and uploads them to S3 with organized metadata, reports, and DICOM files.
+This system extracts eligible chest DICOM studies based on specific criteria and copies them from S3 origin bucket to GCS destination bucket with organized metadata, reports, and DICOM files.
 
 ### Key Features
 
 - **Automated Discovery**: Identifies eligible chest studies based on doctor rankings and study criteria
-- **S3 Integration**: Organized file storage in S3 with structured metadata
+- **S3 to GCS Migration**: Copies files from AWS S3 origin bucket to GCS destination GCS_DESTINATION_BUCKET_NAME
+- **Cross-Cloud Copying**: Uses gsutil for efficient cross-cloud file transfers
 - **Parallel Processing**: Celery groups for parallel study processing
 - **Error Handling**: Robust error handling and logging
 - **Scheduled Tasks**: Automated discovery and processing via Celery Beat
@@ -21,15 +22,15 @@ This system extracts eligible chest DICOM studies based on specific criteria and
 The DICOM extraction pipeline:
 
 - Discovers eligible chest studies (CR/DX modalities) signed by doctors ranked 2-6
-- Extracts DICOM image files and associated reports
-- Uploads data to S3 bucket `s3-bucket-name` with organized structure
+- Extracts DICOM image files and associated reports from S3 origin bucket
+- Copies data from S3 origin to GCS destination bucket `GCS_DESTINATION_BUCKET_NAME` with organized structure
 - Tracks processing status and errors
 
 ### Components
 
 - **Celery Tasks**: Asynchronous task execution for DICOM extraction
 - **DICOM Pipeline**: Core extraction and processing logic
-- **S3 Service**: Handles file uploads to S3 with organized structure
+- **GCS Service**: Handles file copying from S3 origin to GCS destination with organized structure
 - **Database Bridge**: Manages connections to source database
 - **Query Layer**: SQL queries for discovering eligible studies
 
@@ -38,7 +39,10 @@ The DICOM extraction pipeline:
 - Python 3.10+
 - PostgreSQL database (source database with PACS data)
 - Redis (for Celery broker and result backend)
-- AWS S3 bucket access
+- AWS S3 bucket access (origin bucket)
+- Google Cloud Storage bucket access (destination bucket)
+- AWS CLI installed and configured
+- gsutil installed and configured (for cross-cloud copying)
 - Docker and Docker Compose (for local development)
 
 ## Installation
@@ -75,12 +79,25 @@ SOURCE_DATABASE_PORT=5432
 REDIS_URL=redis://localhost:6379/0
 ```
 
-#### AWS S3 Configuration
+#### AWS S3 Origin Bucket Configuration
 ```env
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+# Origin S3 bucket name (where files are copied from)
+S3_ORIGIN_BUCKET_NAME=s3-origin-bucket-name
+
+# AWS credentials for accessing S3 origin bucket
+AWS_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
 AWS_REGION_NAME=us-east-1
-S3_BUCKET_NAME=s3-bucket-name
+```
+
+#### Google Cloud Storage Destination Bucket Configuration
+```env
+# Destination GCS bucket name (where files are copied to)
+GCS_BUCKET_NAME=gcs-bucket-name
+
+# Optional: Path to GCS service account JSON key file
+# If not provided, uses Application Default Credentials (gcloud auth application-default login)
+GCS_CREDENTIALS_PATH=/path/to/service-account-key.json
 ```
 
 #### Other Configuration
@@ -128,11 +145,11 @@ The DICOM extraction pipeline identifies eligible chest studies based on:
    - Finds eligible studies matching criteria
    - Queues processing tasks for each study
 
-2. **Processing Phase** (`process_study_to_s3` task):
+2. **Processing Phase** (`process_study_to_gcs` task):
    - Extracts study metadata
-   - Retrieves DICOM image files
-   - Retrieves report content
-   - Uploads everything to S3 with organized structure
+   - Retrieves DICOM image files from S3 origin bucket
+   - Retrieves report content from S3 origin bucket
+   - Copies everything from S3 origin to GCS destination with organized structure
 
 #### Manual Execution
 
@@ -151,10 +168,10 @@ result = discover_chest_dicom_studies.delay(limit=100)
 ##### Process Individual Study
 
 ```python
-from tasks import process_study_to_s3
+from tasks import process_study_to_gcs
 
 # Process a specific study
-result = process_study_to_s3.delay(
+result = process_study_to_gcs.delay(
     study_id="study-uuid-here"
 )
 ```
@@ -162,11 +179,11 @@ result = process_study_to_s3.delay(
 ##### Process Batch of Studies
 
 ```python
-from tasks import process_study_batch_to_s3
+from tasks import process_study_batch_to_gcs
 
 # Process multiple studies in parallel
 study_ids = ["uuid1", "uuid2", "uuid3"]
-result = process_study_batch_to_s3.delay(study_ids)
+result = process_study_batch_to_gcs.delay(study_ids)
 ```
 
 #### Scheduled Tasks
@@ -175,12 +192,13 @@ The following task runs automatically via Celery Beat:
 
 - **DICOM Discovery**: Daily at 2 AM - discovers and queues chest DICOM studies
 
-#### S3 Structure
+#### Storage Structure
 
-Files are organized in S3 with the following structure:
+Files are copied from S3 origin bucket to GCS destination bucket with the following structure:
 
+**S3 Origin Bucket:**
 ```
-s3-bucket-name/
+s3://s3-origin-bucket-name/
 └── {organization_id}/
     └── {study_id}/
         ├── metadata.json          # Study metadata
@@ -191,6 +209,22 @@ s3-bucket-name/
                 ├── {instance_number:04d}_{image_id}.dcm
                 └── ...
 ```
+
+**GCS Destination Bucket:**
+```
+gs://gcs-bucket-name/
+└── {organization_id}/
+    └── {study_id}/
+        ├── metadata.json          # Study metadata
+        ├── reports/
+        │   └── {report_id}.txt    # Report content
+        └── dicom_files/
+            └── {series_id}/
+                ├── {instance_number:04d}_{image_id}.dcm
+                └── ...
+```
+
+The service uses `gsutil cp` to copy files directly from S3 to GCS, preserving the same directory structure.
 
 ## Monitoring
 
@@ -233,7 +267,7 @@ vlm-eden-dataset-etl/
 ├── sync/                      # Core modules
 │   ├── database_breach.py     # Database connection bridge
 │   ├── dicom_pipeline.py      # DICOM extraction pipeline
-│   └── s3_service.py          # S3 upload service
+│   └── gcs_service.py         # GCS upload service
 ├── scripts/                   # Shell scripts
 ├── docker-compose.yml         # Docker Compose configuration
 ├── Dockerfile                 # Docker image definition
@@ -265,7 +299,7 @@ make logs
 - Tasks are defined in `tasks.py` and decorated with `@app.task`
 - DICOM extraction logic is in `sync/dicom_pipeline.py`
 - SQL queries for study discovery are in `queries/chest_dicom_studies.py`
-- S3 upload logic is in `sync/s3_service.py`
+- S3 to GCS copying logic is in `sync/gcs_service.py`
 
 ## Troubleshooting
 
@@ -277,11 +311,20 @@ make logs
 - Check network connectivity to database server
 - Ensure PostgreSQL is accepting connections
 
-#### S3 Upload Failures
+#### S3 to GCS Copy Failures
 
-- Verify AWS credentials in `.env`
-- Check S3 bucket permissions
-- Ensure bucket exists: `s3-bucket-name`
+**S3 Origin Issues:**
+- Verify AWS credentials in `.env` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+- Check S3 origin bucket permissions
+- Ensure S3 origin bucket exists: `s3-origin-bucket-name`
+- Verify AWS CLI is installed and configured: `aws --version`
+
+**GCS Destination Issues:**
+- Verify GCS credentials in `.env` or Application Default Credentials
+- Check GCS destination bucket permissions
+- Ensure GCS destination bucket exists: `gcs-bucket-name`
+- Verify `gsutil` is installed and configured: `gsutil version`
+- Test cross-cloud copying: `gsutil cp s3://bucket/file gs://bucket/file`
 
 #### Celery Tasks Not Running
 
@@ -397,7 +440,10 @@ worker = app.Worker(
 For issues or questions:
 - Check logs: `make logs`
 - Review Flower dashboard
-- Check AWS S3 bucket permissions
+- Verify AWS S3 origin bucket permissions and credentials
+- Verify Google Cloud Storage destination bucket permissions
+- Test AWS CLI access: `aws s3 ls s3://s3-origin-bucket-name/`
+- Test gsutil access: `gsutil ls gs://gcs-bucket-name/`
 - Verify database connections
 
 ## Additional Notes
@@ -411,14 +457,18 @@ The current implementation assumes DICOM files are stored with file paths access
 
 ### Performance Considerations
 
-- Large batches may take time to process
-- Monitor S3 upload costs
+- Large batches may take time to process due to cross-cloud copying
+- Monitor both S3 egress and GCS ingress costs
 - Consider rate limiting for very large batches
 - Use Celery concurrency settings to control parallel processing
+- `gsutil` automatically handles parallel transfers and retries
 
 ### Security
 
 - Never commit `.env` files
-- Use IAM roles for AWS access when possible
-- Rotate AWS credentials regularly
-- Limit S3 bucket access to necessary permissions only
+- Use IAM roles for AWS S3 access when possible
+- Use service accounts for GCS access when possible
+- Rotate AWS and GCS credentials regularly
+- Limit S3 origin bucket access to read-only permissions
+- Limit GCS destination bucket access to write permissions only
+- Use least-privilege principles for both cloud providers

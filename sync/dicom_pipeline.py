@@ -16,7 +16,7 @@ from queries.chest_dicom_studies import (
     get_series_for_study,
 )
 from sync.database_breach import DatabaseBridge
-from sync.s3_service import S3Service
+from sync.gcs_service import GCSService
 
 logger = logging.getLogger(__name__)
 
@@ -86,22 +86,22 @@ class StudyDiscovery:
 
 
 class StudyProcessor:
-    """Processes individual studies for DICOM extraction and S3 upload."""
+    """Processes individual studies for DICOM extraction and GCS upload."""
 
     def __init__(
-        self, bridge: DatabaseBridge, s3_service: Optional[S3Service] = None
+        self, bridge: DatabaseBridge, gcs_service: Optional[GCSService] = None
     ):
         """Initialize study processor.
 
         :param bridge: Database bridge for database connections
-        :param s3_service: Optional S3 service (creates new one if not provided)
+        :param gcs_service: Optional GCS service (creates new one if not provided)
         """
         self.bridge = bridge
         self.source_cursor = bridge.new_cursor(bridge.source_conn)
-        self.s3_service = s3_service or S3Service()
+        self.gcs_service = gcs_service or GCSService()
 
     def process_study(self, study_data: Dict) -> Dict:
-        """Process a single study: extract DICOM files and reports, upload to S3.
+        """Process a single study: extract DICOM files and reports, upload to GCS.
 
         :param study_data: Study data dictionary from discovery
         :return: Processing result dictionary with success status and details
@@ -157,7 +157,7 @@ class StudyProcessor:
     def _upload_study_metadata(
         self, study_data: Dict, result: Dict
     ) -> bool:
-        """Upload study metadata to S3.
+        """Upload study metadata to GCS.
 
         :param study_data: Study data dictionary
         :param result: Result dictionary to update
@@ -198,7 +198,7 @@ class StudyProcessor:
                 "body_part_identifier": study_data.get("body_part_identifier"),
             }
 
-            return self.s3_service.upload_report_metadata(
+            return self.gcs_service.upload_report_metadata(
                 metadata, organization_id, study_id
             )
         except Exception as e:
@@ -208,7 +208,7 @@ class StudyProcessor:
             return False
 
     def _upload_report(self, study_data: Dict, result: Dict) -> bool:
-        """Upload report to S3.
+        """Upload report to GCS.
 
         :param study_data: Study data dictionary
         :param result: Result dictionary to update
@@ -230,7 +230,7 @@ class StudyProcessor:
             if study_data.get("signed_at"):
                 signed_at = study_data["signed_at"].isoformat()
 
-            return self.s3_service.upload_report(
+            return self.gcs_service.upload_report(
                 report_content,
                 organization_id,
                 study_id,
@@ -244,7 +244,7 @@ class StudyProcessor:
             return False
 
     def _upload_dicom_files(self, study_data: Dict, result: Dict) -> int:
-        """Upload DICOM files for a study to S3.
+        """Upload DICOM files for a study to GCS.
 
         :param study_data: Study data dictionary
         :param result: Result dictionary to update
@@ -305,8 +305,8 @@ class StudyProcessor:
                     # you may need to implement custom file retrieval logic here
                     continue
 
-                # Upload to S3
-                success = self.s3_service.upload_dicom_file(
+                # Upload to GCS
+                success = self.gcs_service.upload_dicom_file(
                     file_path,
                     organization_id,
                     str(study_id),

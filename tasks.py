@@ -46,7 +46,7 @@ def discover_chest_dicom_studies(limit: int = None) -> dict:
         # Queue processing tasks for each study
         # Using group for parallel processing
         job = group(
-            process_study_to_s3.s(
+            process_study_to_gcs.s(
                 study_id=str(study["study_id"]),
                 study_data=dict(study),
             )
@@ -78,8 +78,8 @@ def discover_chest_dicom_studies(limit: int = None) -> dict:
 
 
 @app.task
-def process_study_to_s3(study_id: str, study_data: dict = None) -> dict:
-    """Process a single study: extract DICOM files and reports, upload to S3.
+def process_study_to_gcs(study_id: str, study_data: dict = None) -> dict:
+    """Process a single study: extract DICOM files and reports, upload to GCS.
 
     :param study_id: Study UUID as string
     :param study_data: Optional study data dictionary (if not provided, will fetch)
@@ -116,7 +116,7 @@ def process_study_to_s3(study_id: str, study_data: dict = None) -> dict:
 
 
 @app.task
-def process_study_batch_to_s3(study_ids: list) -> dict:
+def process_study_batch_to_gcs(study_ids: list) -> dict:
     """Process a batch of studies in parallel.
 
     :param study_ids: List of study UUID strings
@@ -126,7 +126,7 @@ def process_study_batch_to_s3(study_ids: list) -> dict:
     
     # Create a group of tasks
     job = group(
-        process_study_to_s3.s(study_id=study_id) for study_id in study_ids
+        process_study_to_gcs.s(study_id=study_id) for study_id in study_ids
     )
     
     result = job.apply_async()

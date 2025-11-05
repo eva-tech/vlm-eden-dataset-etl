@@ -1,10 +1,20 @@
-amqp==5.1.1
-boto3==1.28.0
+# Celery and message broker
 celery==5.2.7
-flower==1.2.0
+amqp==5.1.1
 kombu==5.2.4
-psycopg2==2.9.5
-python-dotenv==0.21.0
-pytz==2022.7
 redis==4.4.4
+
+# Database
+psycopg2==2.9.5
+
+# Environment and configuration
+python-dotenv==0.21.0
+
+# Monitoring and task management
+flower==1.2.0
+
+# Error tracking
 sentry-sdk==2.8.0
+
+# Timezone support (required by Celery)
+pytz==2022.7
