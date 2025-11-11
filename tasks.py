@@ -15,9 +15,8 @@ def discover_chest_dicom_studies(limit: int = None) -> dict:
     """Discover eligible chest DICOM studies and queue them for processing.
 
     This task:
-    1. Queries for doctors ranked 2-6 by total signed chest studies
-    2. Finds eligible studies (CR/DX modalities, chest body part)
-    3. Queues processing tasks for each study
+    1. Finds eligible studies (CR/DX modalities, chest body part)
+    2. Queues processing tasks for each study
 
     :param limit: Optional limit on number of studies to process
     :return: Dictionary with discovery results and queued study count
@@ -26,11 +25,7 @@ def discover_chest_dicom_studies(limit: int = None) -> dict:
     try:
         discovery = StudyDiscovery(bridge)
         
-        # Get ranked doctors
-        doctors = discovery.get_ranked_doctors()
-        logger.info(f"Found {len(doctors)} ranked doctors")
-        
-        # Get eligible studies
+        # Get eligible studies (CR/DX modalities, chest body parts)
         studies = discovery.get_eligible_studies(limit=limit)
         logger.info(f"Found {len(studies)} eligible studies")
         
@@ -38,7 +33,6 @@ def discover_chest_dicom_studies(limit: int = None) -> dict:
             logger.info("No eligible studies found for processing")
             return {
                 "success": True,
-                "doctors_found": len(doctors),
                 "studies_found": 0,
                 "studies_queued": 0,
             }
@@ -62,7 +56,6 @@ def discover_chest_dicom_studies(limit: int = None) -> dict:
         
         return {
             "success": True,
-            "doctors_found": len(doctors),
             "studies_found": len(studies),
             "studies_queued": len(studies),
             "task_group_id": result.id,

@@ -29,10 +29,21 @@ services:
       IMAGE_TAG_NAME: "${IMAGE_TAG_NAME}"
       TARGET: "${TARGET}"
       FULL_ECR_REPOSITORY: "${FULL_ECR_REPOSITORY}"
+      SOURCE_DATABASE_NAME: "${SOURCE_DATABASE_NAME}"
+      SOURCE_DATABASE_USER: "${SOURCE_DATABASE_USER}"
+      SOURCE_DATABASE_PASS: "${SOURCE_DATABASE_PASS}"
+      SOURCE_DATABASE_HOST: "${SOURCE_DATABASE_HOST}"
+      SOURCE_DATABASE_PORT: "${SOURCE_DATABASE_PORT}"
+      S3_ORIGIN_BUCKET_NAME: "${S3_ORIGIN_BUCKET_NAME}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION_NAME: "${AWS_REGION_NAME}"
+      GCS_BUCKET_NAME: "${GCS_BUCKET_NAME}"
+      GCS_CREDENTIALS_PATH: "${GCS_CREDENTIALS_PATH}"
     networks:
       - mynetwork
   flower:
-    entrypoint: celery flower -A cron_tasks --conf=flower_config.py
+    entrypoint: celery flower -A cron_tasks --conf=flower_config.py --port=5555
     image: "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}-flower"
     container_name: celery_flower_intelligence
     restart: on-failure
@@ -73,6 +84,17 @@ services:
       IMAGE_TAG_NAME: "${IMAGE_TAG_NAME}"
       TARGET: "${TARGET}"
       FULL_ECR_REPOSITORY: "${FULL_ECR_REPOSITORY}"
+      SOURCE_DATABASE_NAME: "${SOURCE_DATABASE_NAME}"
+      SOURCE_DATABASE_USER: "${SOURCE_DATABASE_USER}"
+      SOURCE_DATABASE_PASS: "${SOURCE_DATABASE_PASS}"
+      SOURCE_DATABASE_HOST: "${SOURCE_DATABASE_HOST}"
+      SOURCE_DATABASE_PORT: "${SOURCE_DATABASE_PORT}"
+      S3_ORIGIN_BUCKET_NAME: "${S3_ORIGIN_BUCKET_NAME}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION_NAME: "${AWS_REGION_NAME}"
+      GCS_BUCKET_NAME: "${GCS_BUCKET_NAME}"
+      GCS_CREDENTIALS_PATH: "${GCS_CREDENTIALS_PATH}"
     networks:
       - mynetwork
   postgres_intelligence:

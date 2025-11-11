@@ -49,7 +49,7 @@ class StudyDiscovery:
     def get_eligible_studies(
         self, limit: Optional[int] = None
     ) -> List[Dict]:
-        """Get eligible chest DICOM studies signed by doctors ranked 2-6.
+        """Get eligible chest DICOM studies (CR and DX modalities, chest body parts).
 
         :param limit: Optional limit on number of studies to return
         :return: List of eligible study dictionaries
@@ -57,6 +57,8 @@ class StudyDiscovery:
         try:
             query = get_eligible_chest_studies
             if limit:
+                # Remove trailing semicolon and whitespace, then add LIMIT
+                query = query.rstrip().rstrip(';')
                 query = f"{query} LIMIT {limit}"
 
             self.source_cursor.execute(query)
@@ -193,7 +195,6 @@ class StudyProcessor:
                 "signed_by_user_id": str(study_data.get("signed_by_user_id")),
                 "signed_by_name": study_data.get("signed_by_name"),
                 "signed_by_email": study_data.get("signed_by_email"),
-                "doctor_rank": study_data.get("doctor_rank"),
                 "body_part_name": study_data.get("body_part_name"),
                 "body_part_identifier": study_data.get("body_part_identifier"),
             }
