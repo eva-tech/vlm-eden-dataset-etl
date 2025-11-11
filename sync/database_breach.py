@@ -8,10 +8,21 @@ from database import create_connection_to_destination, create_connection_to_sour
 class DatabaseBridge:
     """This class is responsible for creating connections to the source and destination databases."""
 
-    def __init__(self):
-        """Initialize the DatabaseBridge class."""
+    def __init__(self, require_destination: bool = False):
+        """Initialize the DatabaseBridge class.
+        
+        :param require_destination: If True, destination connection is required. 
+                                   If False, destination connection is optional.
+        """
         self.source_conn = create_connection_to_source()
-        self.destination_conn = create_connection_to_destination()
+        if require_destination:
+            self.destination_conn = create_connection_to_destination()
+        else:
+            # Try to create destination connection, but don't fail if it's not configured
+            try:
+                self.destination_conn = create_connection_to_destination()
+            except Exception:
+                self.destination_conn = None
 
     def new_cursor(self, conn: DictConnection) -> RealDictCursor:
         """Create a new cursor.
@@ -27,4 +38,5 @@ class DatabaseBridge:
         :return: None
         """
         self.source_conn.close()
-        self.destination_conn.close()
+        if self.destination_conn:
+            self.destination_conn.close()

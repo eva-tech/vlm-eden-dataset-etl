@@ -47,6 +47,27 @@ class GCSService:
         # Set GCS credentials if provided
         if self.gcs_credentials_path:
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.gcs_credentials_path
+            # Also activate service account for gcloud/gsutil
+            try:
+                gcloud_path = "/usr/local/google-cloud-sdk/bin/gcloud"
+                if not os.path.exists(gcloud_path):
+                    # Try alternative path
+                    gcloud_path = "/root/google-cloud-sdk/bin/gcloud"
+                if os.path.exists(gcloud_path):
+                    subprocess.run(
+                        [gcloud_path, "auth", "activate-service-account", "--key-file", self.gcs_credentials_path],
+                        capture_output=True,
+                        check=False,  # Don't fail if this doesn't work
+                    )
+            except Exception as e:
+                logger.warning(f"Could not activate service account: {str(e)}")
+        
+        # If no explicit credentials path, try to use application-default credentials
+        if not self.gcs_credentials_path:
+            app_default_creds = "/root/.config/gcloud/application_default_credentials.json"
+            if os.path.exists(app_default_creds):
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = app_default_creds
+                logger.info("Using application-default credentials from /root/.config/gcloud/")
 
         # Set AWS credentials in environment if provided
         if aws_access_key_id or os.getenv("AWS_ACCESS_KEY_ID"):
@@ -83,8 +104,18 @@ class GCSService:
             source_path = f"s3://{self.origin_bucket_name}/{source_key}"
             destination_path = f"gs://{self.destination_bucket_name}/{destination_key}"
 
+            # Find gsutil - try multiple possible paths
+            import shutil
+            gsutil_path = None
+            for path in ["/usr/local/google-cloud-sdk/bin/gsutil", "/root/google-cloud-sdk/bin/gsutil", "gsutil"]:
+                if os.path.exists(path) if not path == "gsutil" else shutil.which(path):
+                    gsutil_path = path if path != "gsutil" else shutil.which(path)
+                    break
+            if not gsutil_path:
+                gsutil_path = "gsutil"  # Fallback - will fail with clear error
+
             # Build gsutil command (gsutil can copy directly from S3 to GCS)
-            cmd = ["gsutil", "cp", source_path, destination_path]
+            cmd = [gsutil_path, "cp", source_path, destination_path]
 
             # Add metadata if provided (using -h flag for custom metadata)
             if metadata:
@@ -92,12 +123,31 @@ class GCSService:
                     # gsutil uses -h flag for custom metadata: -h "key:value"
                     cmd.extend(["-h", f"{key}:{value}"])
 
+            # Set environment variables for subprocess
+            env = os.environ.copy()
+            # Ensure GOOGLE_APPLICATION_CREDENTIALS is set if we have it
+            if "GOOGLE_APPLICATION_CREDENTIALS" not in env:
+                app_default_creds = "/root/.config/gcloud/application_default_credentials.json"
+                if os.path.exists(app_default_creds):
+                    env["GOOGLE_APPLICATION_CREDENTIALS"] = app_default_creds
+            
+            # Ensure AWS credentials are set for S3 access
+            if "AWS_ACCESS_KEY_ID" in os.environ:
+                env["AWS_ACCESS_KEY_ID"] = os.environ["AWS_ACCESS_KEY_ID"]
+            if "AWS_SECRET_ACCESS_KEY" in os.environ:
+                env["AWS_SECRET_ACCESS_KEY"] = os.environ["AWS_SECRET_ACCESS_KEY"]
+            if "AWS_DEFAULT_REGION" in os.environ:
+                env["AWS_DEFAULT_REGION"] = os.environ["AWS_DEFAULT_REGION"]
+            elif "AWS_REGION_NAME" in os.environ:
+                env["AWS_DEFAULT_REGION"] = os.environ["AWS_REGION_NAME"]
+            
             # Execute command
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 check=True,
+                env=env,
             )
 
             logger.info(
@@ -147,7 +197,16 @@ class GCSService:
         """
         try:
             source_path = f"gs://{bucket_name}/{gcs_key}"
-            cmd = ["gsutil", "ls", source_path]
+            # Find gsutil - try multiple possible paths
+            import shutil
+            gsutil_path = None
+            for path in ["/usr/local/google-cloud-sdk/bin/gsutil", "/root/google-cloud-sdk/bin/gsutil", "gsutil"]:
+                if os.path.exists(path) if not path == "gsutil" else shutil.which(path):
+                    gsutil_path = path if path != "gsutil" else shutil.which(path)
+                    break
+            if not gsutil_path:
+                gsutil_path = "gsutil"  # Fallback - will fail with clear error
+            cmd = [gsutil_path, "ls", source_path]
 
             result = subprocess.run(
                 cmd,
@@ -363,7 +422,16 @@ class GCSService:
             prefix = f"{organization_id}/{study_id}/"
             source_path = f"gs://{bucket}/{prefix}"
 
-            cmd = ["gsutil", "ls", source_path, "-r"]
+            # Find gsutil - try multiple possible paths
+            import shutil
+            gsutil_path = None
+            for path in ["/usr/local/google-cloud-sdk/bin/gsutil", "/root/google-cloud-sdk/bin/gsutil", "gsutil"]:
+                if os.path.exists(path) if not path == "gsutil" else shutil.which(path):
+                    gsutil_path = path if path != "gsutil" else shutil.which(path)
+                    break
+            if not gsutil_path:
+                gsutil_path = "gsutil"  # Fallback - will fail with clear error
+            cmd = [gsutil_path, "ls", source_path, "-r"]
 
             result = subprocess.run(
                 cmd,

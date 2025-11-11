@@ -1,6 +1,16 @@
 FROM python:3.10 AS base
 
-RUN apt-get update
+RUN apt-get update && apt-get install -y curl gnupg
+
+# Install Google Cloud SDK (gsutil) non-interactively
+# Using the official installation method with environment variables for non-interactive install
+ENV CLOUDSDK_CORE_DISABLE_PROMPTS=1
+ENV CLOUDSDK_INSTALL_DIR=/usr/local
+RUN curl https://sdk.cloud.google.com | bash && \
+    /usr/local/google-cloud-sdk/install.sh --quiet --usage-reporting=false && \
+    /usr/local/google-cloud-sdk/bin/gcloud components install gsutil --quiet
+
+ENV PATH="$PATH:/usr/local/google-cloud-sdk/bin"
 
 ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
@@ -28,7 +38,7 @@ FROM base AS staging-celery-beat
 FROM base AS production-celery-beat
 
 FROM base AS development-celery
-RUN pip3 install -r requirements-dev.txt
+RUN if [ -f requirements-dev.txt ]; then pip3 install -r requirements-dev.txt; fi
 ENTRYPOINT ["scripts/celery.sh"]
 
 FROM base AS development-flower
