@@ -1,49 +1,54 @@
 # VLM Eden Dataset ETL System
 
-A specialized ETL system built with Python and Celery that extracts chest DICOM images and reports from a source PostgreSQL database, copies them from AWS S3 origin bucket to Google Cloud Storage (GCS) GCS_DESTINATION_BUCKET_NAME bucket for Vision Language Model (VLM) dataset creation.
+A specialized ETL system built with Python and Celery that extracts DICOM medical imaging files and reports from a PostgreSQL PACS database, converts DICOM files to JPEG images, and uploads everything to Google Cloud Storage (GCS) for Vision Language Model (VLM) dataset creation.
 
 ## Overview
 
-This system extracts eligible chest DICOM studies based on specific criteria and copies them from S3 origin bucket to GCS destination bucket with organized metadata, reports, and DICOM files.
+This system extracts DICOM files and associated reports from a PACS database, downloads the DICOM files, converts them to JPEG format using dcm4che, and uploads all files (DICOM, JPEG, and CSV metadata) to a GCS bucket with organized structure.
 
 ### Key Features
 
-- **Automated Discovery**: Identifies eligible chest studies based on doctor rankings and study criteria
-- **S3 to GCS Migration**: Copies files from AWS S3 origin bucket to GCS destination GCS_DESTINATION_BUCKET_NAME
-- **Cross-Cloud Copying**: Uses gsutil for efficient cross-cloud file transfers
-- **Parallel Processing**: Celery groups for parallel study processing
-- **Error Handling**: Robust error handling and logging
-- **Scheduled Tasks**: Automated discovery and processing via Celery Beat
+- **DICOM Extraction**: Extracts DICOM files and reports from PostgreSQL PACS database
+- **DICOM to JPEG Conversion**: Converts DICOM files to JPEG using dcm4che toolkit
+- **Parallel Processing**: Uses Celery tasks for asynchronous DICOM conversion and file uploads
+- **Progress Tracking**: Implements pagination and batching with progress tracking and resumption capability
+- **GCS Upload**: Uploads DICOM files, JPEG images, and CSV metadata to GCS bucket
+- **Error Handling**: Robust error handling and logging throughout the pipeline
 
-## Architecture
+## Repository Structure
 
-### DICOM Extraction Pipeline
-
-The DICOM extraction pipeline:
-
-- Discovers eligible chest studies (CR/DX modalities) signed by doctors ranked 2-6
-- Extracts DICOM image files and associated reports from S3 origin bucket
-- Copies data from S3 origin to GCS destination bucket `GCS_DESTINATION_BUCKET_NAME` with organized structure
-- Tracks processing status and errors
-
-### Components
-
-- **Celery Tasks**: Asynchronous task execution for DICOM extraction
-- **DICOM Pipeline**: Core extraction and processing logic
-- **GCS Service**: Handles file copying from S3 origin to GCS destination with organized structure
-- **Database Bridge**: Manages connections to source database
-- **Query Layer**: SQL queries for discovering eligible studies
+```
+vlm-eden-dataset-etl/
+├── extract_and_upload_dicom_reports.py  # Main extraction script
+├── queries/                              # SQL query definitions
+│   └── get_chest_dicom_files_and_reports.py  # DICOM extraction queries
+├── sync/                                 # Core modules
+│   ├── database_breach.py               # Database connection bridge
+│   └── gcs_service.py                   # GCS upload service
+├── tasks.py                             # Celery task definitions
+│   ├── convert_dicom_to_jpg            # DICOM to JPEG conversion task
+│   └── upload_file_to_gcs              # GCS file upload task
+├── celery_app.py                        # Celery application configuration
+├── celery_config.py                     # Celery task scheduling
+├── database.py                          # Database connection utilities
+├── run_worker.py                        # Celery worker entry point
+├── Dockerfile                           # Docker image with dcm4che and gsutil
+├── docker-compose.yml                   # Docker Compose configuration
+├── Makefile                             # Make commands for development
+├── requirements.txt                     # Python dependencies
+├── README.md                            # This file
+└── README-dataset.md                    # Dataset documentation (in GCS bucket)
+```
 
 ## Prerequisites
 
 - Python 3.10+
 - PostgreSQL database (source database with PACS data)
 - Redis (for Celery broker and result backend)
-- AWS S3 bucket access (origin bucket)
 - Google Cloud Storage bucket access (destination bucket)
-- AWS CLI installed and configured
-- gsutil installed and configured (for cross-cloud copying)
 - Docker and Docker Compose (for local development)
+- Google Cloud SDK (gsutil) - installed in Docker image
+- Java JDK and Maven - for dcm4che (installed in Docker image)
 
 ## Installation
 
@@ -54,13 +59,7 @@ git clone <repository-url>
 cd vlm-eden-dataset-etl
 ```
 
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Environment Configuration
+### 2. Environment Configuration
 
 Create a `.env` file with the following variables:
 
@@ -79,24 +78,13 @@ SOURCE_DATABASE_PORT=5432
 REDIS_URL=redis://localhost:6379/0
 ```
 
-#### AWS S3 Origin Bucket Configuration
+#### Google Cloud Storage Configuration
 ```env
-# Origin S3 bucket name (where files are copied from)
-S3_ORIGIN_BUCKET_NAME=s3-origin-bucket-name
-
-# AWS credentials for accessing S3 origin bucket
-AWS_ACCESS_KEY_ID=your_aws_access_key_id
-AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
-AWS_REGION_NAME=us-east-1
-```
-
-#### Google Cloud Storage Destination Bucket Configuration
-```env
-# Destination GCS bucket name (where files are copied to)
-GCS_BUCKET_NAME=gcs-bucket-name
+# Destination GCS bucket name
+GCS_BUCKET_NAME=ai-training-dev
 
 # Optional: Path to GCS service account JSON key file
-# If not provided, uses Application Default Credentials (gcloud auth application-default login)
+# If not provided, uses Application Default Credentials
 GCS_CREDENTIALS_PATH=/path/to/service-account-key.json
 ```
 
@@ -109,13 +97,23 @@ SECRET_KEY=your_secret_key
 LOGGING_LEVEL=INFO
 ```
 
-### 4. Run with Docker Compose
+### 3. Build and Start Docker Containers
+
+The Docker image includes:
+- Python 3.10
+- dcm4che toolkit (for DICOM to JPEG conversion)
+- Google Cloud SDK (gsutil)
+- All Python dependencies
 
 ```bash
-# Initialize and start all services
+# Build Docker images (includes dcm4che installation)
+make build
+
+# Start all services
 make up
 
 # Or manually:
+docker-compose build
 docker-compose up -d
 ```
 
@@ -125,112 +123,217 @@ This will start:
 - Celery Beat (scheduler)
 - Flower (task monitoring)
 
-## Usage
+### 4. Configure GCS Authentication
 
-### DICOM Extraction Pipeline
+Authenticate with Google Cloud Storage:
 
-#### Overview
+```bash
+# Interactive authentication (opens browser)
+docker exec -it celery_worker_intelligence gcloud auth application-default login
 
-The DICOM extraction pipeline identifies eligible chest studies based on:
-- **Modalities**: CR and DX only
-- **Body Part**: Chest (including variations: chest, torax, thorax, pecho, peito)
-- **Doctors**: Ranked 2-6 by total signed chest studies
-- **Status**: Studies with signed, active, non-deleted reports
-
-#### Pipeline Flow
-
-1. **Discovery Phase** (`discover_chest_dicom_studies` task):
-   - Queries for doctors ranked by total signed chest studies
-   - Filters to doctors ranked 2-6
-   - Finds eligible studies matching criteria
-   - Queues processing tasks for each study
-
-2. **Processing Phase** (`process_study_to_gcs` task):
-   - Extracts study metadata
-   - Retrieves DICOM image files from S3 origin bucket
-   - Retrieves report content from S3 origin bucket
-   - Copies everything from S3 origin to GCS destination with organized structure
-
-#### Manual Execution
-
-##### Discover and Queue Studies
-
-```python
-from tasks import discover_chest_dicom_studies
-
-# Discover all eligible studies and queue them
-result = discover_chest_dicom_studies.delay()
-
-# With limit (process only first 100 studies)
-result = discover_chest_dicom_studies.delay(limit=100)
+# Or use service account key file (set GCS_CREDENTIALS_PATH in .env)
 ```
 
-##### Process Individual Study
+## Usage
 
+### DICOM Extraction and Upload Pipeline
+
+The main extraction script (`extract_and_upload_dicom_reports.py`) performs the following:
+
+1. **Query Database**: Extracts DICOM files and reports from randomly selected studies
+2. **Download DICOM Files**: Downloads DICOM files from source URLs
+3. **Convert to JPEG**: Converts DICOM files to JPEG using dcm4che (via Celery tasks)
+4. **Generate CSV**: Creates CSV file with metadata and report values
+5. **Upload to GCS**: Uploads DICOM files, JPEG images, and CSV to GCS bucket
+
+### Running the Extraction Script
+
+#### Basic Execution
+
+```bash
+# Run the extraction script inside the Docker container
+docker exec celery_worker_intelligence python extract_and_upload_dicom_reports.py
+```
+
+#### Configuration
+
+The script can be configured by modifying `queries/get_chest_dicom_files_and_reports.py`:
+
+- **Number of Studies**: Modify the `LIMIT` clause in the query (currently set to 8 random studies)
+- **Pagination**: Adjust `PAGE_SIZE` and `BATCH_SIZE` in `extract_and_upload_dicom_reports.py`
+
+Example query modification:
 ```python
-from tasks import process_study_to_gcs
-
-# Process a specific study
-result = process_study_to_gcs.delay(
-    study_id="study-uuid-here"
+# In queries/get_chest_dicom_files_and_reports.py
+WITH all_studies AS (
+  SELECT id
+  FROM pacs_studies
+  WHERE deleted = FALSE
+  ORDER BY RANDOM()
+  LIMIT 8  # Change this number to select more/fewer studies
 )
 ```
 
-##### Process Batch of Studies
+### Understanding the Output
 
-```python
-from tasks import process_study_batch_to_gcs
+#### Console Output
 
-# Process multiple studies in parallel
-study_ids = ["uuid1", "uuid2", "uuid3"]
-result = process_study_batch_to_gcs.delay(study_ids)
+The script provides detailed progress information:
+
+```
+======================================================================
+Starting DICOM and reports extraction process with pagination and batching
+======================================================================
+EXTRACTION STATISTICS
+======================================================================
+Total records: 8
+Total pages: 1
+Page size: 25
+Batch size: 25
+Starting from page: 1
+Count query time: 0:00:00 (0.19 seconds)
+======================================================================
+
+Processing page 1/1 (100.0%)
+Downloading DICOM files: [==================================================] 8/8 (100.0%)
+Converting DICOM files to JPG...
+DICOM to JPG conversions: 8/8 successful
+
+EXTRACTION PHASE COMPLETE
+======================================================================
+Extraction time: 0:00:05 (5.47 seconds)
+Total files to download: 8
+Total files downloaded: 8
+======================================================================
+
+Starting GCS upload...
+CSV uploaded successfully
+DICOM files uploaded successfully
+JPG images uploaded: 8/8 successful
+
+EXTRACTION AND UPLOAD COMPLETE
+======================================================================
+TIMING SUMMARY:
+  Count query: 0:00:00 (0.19s)
+  Extraction: 0:00:05 (5.47s)
+  Upload: 0:00:12 (12.06s)
+  TOTAL TIME: 0:00:18 (18.61 seconds)
+
+FILES SUMMARY:
+  CSV file: /tmp/dicom_extract_xxxxx/dicom-reports-extracted-sample.csv
+  Downloaded DICOM files: 8
+  Files uploaded to GCS: 8
+
+GCS LOCATIONS:
+  CSV: gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-reports-extracted-sample.csv
+  DICOM files: gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-files/
+  JPG images: gs://ai-training-dev/eden-dataset-vlms/sample-test/images-jpg/
+======================================================================
 ```
 
-#### Scheduled Tasks
+#### GCS Bucket Structure
 
-The following task runs automatically via Celery Beat:
+After execution, files are organized in GCS as follows:
 
-- **DICOM Discovery**: Daily at 2 AM - discovers and queues chest DICOM studies
-
-#### Storage Structure
-
-Files are copied from S3 origin bucket to GCS destination bucket with the following structure:
-
-**S3 Origin Bucket:**
 ```
-s3://s3-origin-bucket-name/
-└── {organization_id}/
-    └── {study_id}/
-        ├── metadata.json          # Study metadata
-        ├── reports/
-        │   └── {report_id}.txt    # Report content
-        └── dicom_files/
-            └── {series_id}/
-                ├── {instance_number:04d}_{image_id}.dcm
-                └── ...
+gs://ai-training-dev/eden-dataset-vlms/sample-test/
+├── README-dataset.md                          # Dataset documentation
+├── dicom-reports-extracted-sample.csv         # Metadata CSV file
+├── dicom-files/                               # DICOM files directory
+│   ├── {instance_id}.dcm                      # DICOM files (flat structure)
+│   └── ...
+└── images-jpg/                                # JPEG images directory
+    ├── {instance_id}.jpg                      # JPEG files (flat structure)
+    └── ...
 ```
 
-**GCS Destination Bucket:**
-```
-gs://gcs-bucket-name/
-└── {organization_id}/
-    └── {study_id}/
-        ├── metadata.json          # Study metadata
-        ├── reports/
-        │   └── {report_id}.txt    # Report content
-        └── dicom_files/
-            └── {series_id}/
-                ├── {instance_number:04d}_{image_id}.dcm
-                └── ...
+#### CSV File Structure
+
+The CSV file (`dicom-reports-extracted-sample.csv`) contains the following columns:
+
+- `study_id`: Unique study identifier
+- `series_number`: Series number within the study
+- `instance_id`: Unique instance identifier (used as filename)
+- `instance_number`: Instance number within the series
+- `file_path`: Original file path in the source system
+- `file_url`: URL to download the original DICOM file
+- `report_value`: Extracted report text from `pacs_report_fields.value` (aggregated at study level)
+- `field_created_at`: Timestamp when the report field was created
+- `downloaded`: Boolean indicating if the file was successfully downloaded
+- `local_file_path`: Local path where the file was stored during processing
+
+#### File Naming Convention
+
+All files use the `instance_id` (UUID format) as their filename:
+- **DICOM files**: `{instance_id}.dcm` → `gs://.../dicom-files/{instance_id}.dcm`
+- **JPEG files**: `{instance_id}.jpg` → `gs://.../images-jpg/{instance_id}.jpg`
+
+This allows easy correlation between:
+- CSV metadata rows
+- DICOM files
+- JPEG converted images
+
+### Interpreting Results
+
+#### Success Indicators
+
+1. **Extraction Phase**:
+   - All DICOM files downloaded successfully
+   - All DICOM to JPEG conversions successful
+   - CSV file created with all rows
+
+2. **Upload Phase**:
+   - CSV file uploaded to GCS
+   - All DICOM files uploaded to GCS
+   - All JPEG images uploaded to GCS
+
+#### Progress Tracking
+
+The script creates a progress file (`extraction_progress.json`) that allows resuming from where it left off if interrupted. The progress file tracks:
+- Current page number
+- Processed file keys
+- CSV rows written
+
+#### Error Handling
+
+- Failed downloads are logged but don't stop the process
+- Failed conversions are logged with error details
+- Failed uploads are logged with error details
+- Check logs for specific error messages
+
+### Verifying Uploads
+
+#### List Files in GCS
+
+```bash
+# List all files in the sample-test folder
+docker exec celery_worker_intelligence gsutil ls -r gs://ai-training-dev/eden-dataset-vlms/sample-test/
+
+# Count DICOM files
+docker exec celery_worker_intelligence gsutil ls gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-files/*.dcm | wc -l
+
+# Count JPEG files
+docker exec celery_worker_intelligence gsutil ls gs://ai-training-dev/eden-dataset-vlms/sample-test/images-jpg/*.jpg | wc -l
 ```
 
-The service uses `gsutil cp` to copy files directly from S3 to GCS, preserving the same directory structure.
+#### Download Files for Verification
+
+```bash
+# Download CSV file
+docker exec celery_worker_intelligence gsutil cp gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-reports-extracted-sample.csv .
+
+# Download a specific DICOM file
+docker exec celery_worker_intelligence gsutil cp gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-files/{instance_id}.dcm .
+
+# Download a specific JPEG file
+docker exec celery_worker_intelligence gsutil cp gs://ai-training-dev/eden-dataset-vlms/sample-test/images-jpg/{instance_id}.jpg .
+```
 
 ## Monitoring
 
 ### Flower Dashboard
 
-Access the Flower dashboard for task monitoring:
+Access the Flower dashboard for Celery task monitoring:
 
 ```
 http://localhost:5555/flower
@@ -246,35 +349,33 @@ View logs using Docker Compose:
 make logs
 
 # Or directly:
-docker-compose logs -f celery_worker
+docker-compose logs -f celery_worker_intelligence
 ```
 
 ### Task Status
 
-Check task results in Redis or via Flower dashboard.
+Check Celery task results:
+- Via Flower dashboard
+- In Redis (using Redis CLI)
+- In console output during script execution
 
-## Project Structure
+## Project Structure Details
 
-```
-vlm-eden-dataset-etl/
-├── celery_app.py              # Celery application configuration
-├── celery_config.py           # Celery task scheduling
-├── database.py                # Database connection utilities
-├── run_worker.py              # Celery worker entry point
-├── tasks.py                   # Celery task definitions
-├── queries/                   # SQL queries
-│   └── chest_dicom_studies.py # DICOM extraction queries
-├── sync/                      # Core modules
-│   ├── database_breach.py     # Database connection bridge
-│   ├── dicom_pipeline.py      # DICOM extraction pipeline
-│   └── gcs_service.py         # GCS upload service
-├── scripts/                   # Shell scripts
-├── docker-compose.yml         # Docker Compose configuration
-├── Dockerfile                 # Docker image definition
-├── Makefile                   # Make commands
-├── requirements.txt           # Python dependencies
-└── README.md                  # This file
-```
+### Main Scripts
+
+- **`extract_and_upload_dicom_reports.py`**: Main extraction script that orchestrates the entire pipeline
+- **`queries/get_chest_dicom_files_and_reports.py`**: SQL queries for extracting DICOM files and reports
+- **`tasks.py`**: Celery tasks for DICOM to JPEG conversion and GCS uploads
+
+### Core Modules
+
+- **`sync/database_breach.py`**: Database connection management
+- **`sync/gcs_service.py`**: GCS service for file uploads
+
+### Docker Configuration
+
+- **`Dockerfile`**: Includes dcm4che installation, Google Cloud SDK, and Python dependencies
+- **`docker-compose.yml`**: Orchestrates Redis, Celery worker, Celery beat, and Flower services
 
 ## Development
 
@@ -287,19 +388,45 @@ make up
 # Access worker bash
 make bash
 
-# Format code
-make format
-
 # View logs
 make logs
+
+# Rebuild after code changes
+make build
+make up
 ```
 
-### Code Structure
+### Modifying the Query
 
-- Tasks are defined in `tasks.py` and decorated with `@app.task`
-- DICOM extraction logic is in `sync/dicom_pipeline.py`
-- SQL queries for study discovery are in `queries/chest_dicom_studies.py`
-- S3 to GCS copying logic is in `sync/gcs_service.py`
+To change which studies are extracted, edit `queries/get_chest_dicom_files_and_reports.py`:
+
+```python
+# Select all studies (remove LIMIT)
+WITH all_studies AS (
+  SELECT id
+  FROM pacs_studies
+  WHERE deleted = FALSE
+)
+
+# Select specific number of random studies
+WITH all_studies AS (
+  SELECT id
+  FROM pacs_studies
+  WHERE deleted = FALSE
+  ORDER BY RANDOM()
+  LIMIT 8  # Change this number
+)
+```
+
+### Adjusting Batch Sizes
+
+Modify pagination and batch sizes in `extract_and_upload_dicom_reports.py`:
+
+```python
+# Configuration
+PAGE_SIZE = 25    # Records per page from database
+BATCH_SIZE = 25   # Records processed per batch
+```
 
 ## Troubleshooting
 
@@ -310,35 +437,38 @@ make logs
 - Verify database credentials in `.env`
 - Check network connectivity to database server
 - Ensure PostgreSQL is accepting connections
+- Test connection: `docker exec celery_worker_intelligence python -c "from sync.database_breach import DatabaseBridge; bridge = DatabaseBridge(); print('Connected')"`
 
-#### S3 to GCS Copy Failures
+#### GCS Upload Failures
 
-**S3 Origin Issues:**
-- Verify AWS credentials in `.env` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
-- Check S3 origin bucket permissions
-- Ensure S3 origin bucket exists: `s3-origin-bucket-name`
-- Verify AWS CLI is installed and configured: `aws --version`
+- **Authentication Issues**:
+  - Run: `docker exec -it celery_worker_intelligence gcloud auth application-default login`
+  - Or set `GCS_CREDENTIALS_PATH` in `.env` to a service account key file
+  - Verify credentials: `docker exec celery_worker_intelligence gcloud auth list`
 
-**GCS Destination Issues:**
-- Verify GCS credentials in `.env` or Application Default Credentials
-- Check GCS destination bucket permissions
-- Ensure GCS destination bucket exists: `gcs-bucket-name`
-- Verify `gsutil` is installed and configured: `gsutil version`
-- Test cross-cloud copying: `gsutil cp s3://bucket/file gs://bucket/file`
+- **Permission Issues**:
+  - Ensure the authenticated account has Storage Object Admin permissions
+  - Check bucket exists: `gsutil ls gs://ai-training-dev/`
+  - Test upload: `gsutil cp test.txt gs://ai-training-dev/test/`
+
+#### DICOM Conversion Failures
+
+- **dcm2jpg Not Found**:
+  - Rebuild Docker image: `make build`
+  - Verify dcm2jpg installation: `docker exec celery_worker_intelligence which dcm2jpg`
+  - Test conversion: `docker exec celery_worker_intelligence dcm2jpg --help`
+
+- **Conversion Errors**:
+  - Check DICOM file validity
+  - Verify Java is installed: `docker exec celery_worker_intelligence java -version`
+  - Check Celery worker logs for detailed error messages
 
 #### Celery Tasks Not Running
 
-- Check Redis connection
-- Verify Celery worker is running: `docker ps`
+- Check Redis connection: `docker exec celery_worker_intelligence redis-cli ping`
+- Verify Celery worker is running: `docker ps | grep celery`
 - Check logs: `make logs`
-
-#### DICOM Files Not Found
-
-The pipeline expects DICOM files to be accessible via the `file_path` field in the `pacs_images` table. If your system stores DICOM files differently:
-
-1. Modify `sync/dicom_pipeline.py` in the `_upload_dicom_files` method
-2. Implement custom file retrieval logic based on your storage system
-3. Update the query in `queries/chest_dicom_studies.py` if needed
+- Restart services: `make down && make up`
 
 ### Debugging
 
@@ -348,127 +478,70 @@ Enable debug logging:
 LOGGING_LEVEL=DEBUG
 ```
 
-View task details in Flower or check Celery logs.
-
-## DICOM Pipeline Details
-
-### Study Eligibility Criteria
-
-A study is eligible for extraction if it meets ALL of the following:
-
-1. **Modality**: CR or DX
-2. **Body Part**: Contains "chest", "torax", "thorax", "pecho", or "peito" (case-insensitive)
-   - Matched in `pacs_body_part.name` or `pacs_body_part.identifier`
-   - Or in `pacs_studies.dicom_description`
-3. **Report Status**: 
-   - `pr.is_active = TRUE`
-   - `pr.deleted = FALSE`
-   - `pr.status = 'SIGNED'`
-4. **Doctor Rank**: Signed by a doctor ranked 2-6 (by total signed chest studies)
-5. **Organization**: Non-demo organization (`po.is_demo = FALSE`)
-6. **Study Status**: Not migrated (`ps.migrated = FALSE`)
-
-### Doctor Ranking
-
-Doctors are ranked based on their total count of signed chest studies. Only studies signed by doctors ranked 2-6 are processed.
-
-The ranking query includes all doctors who have signed chest studies (CR/DX/PX modalities), ordered by total count descending.
-
-### Processing Results
-
-Each study processing returns a dictionary:
-
-```python
-{
-    "study_id": "uuid",
-    "organization_id": "uuid",
-    "success": True/False,
-    "dicom_files_uploaded": 5,
-    "reports_uploaded": 1,
-    "metadata_uploaded": True,
-    "errors": []
-}
-```
-
-### Error Handling
-
-- Failed uploads are logged but don't stop batch processing
-- Individual study failures don't affect other studies
-- Errors are collected in the result dictionary
-- Check Flower dashboard or logs for detailed error messages
+View detailed task execution in Flower dashboard or check Celery logs.
 
 ## Configuration
 
-### Scheduling
+### Study Selection
 
-Modify `celery_config.py` to adjust task schedules:
+Modify `queries/get_chest_dicom_files_and_reports.py` to change study selection criteria:
 
-```python
-beat_schedule = {
-    "discover_chest_dicom_studies": {
-        "task": "tasks.discover_chest_dicom_studies",
-        "schedule": crontab(minute="0", hour="2"),  # Daily at 2 AM
-    },
-}
-```
+- **Random Selection**: Uses `ORDER BY RANDOM() LIMIT N`
+- **All Studies**: Remove `ORDER BY RANDOM() LIMIT` clause
+- **Specific Criteria**: Add `WHERE` clauses to filter studies
 
-### Batch Size
+### DICOM to JPEG Conversion
 
-Adjust concurrency in `run_worker.py`:
+The conversion uses dcm4che's `dcm2jpg` tool with quality 1.0 (maximum quality). To modify:
+
+Edit `tasks.py` in the `convert_dicom_to_jpg` function:
 
 ```python
-worker = app.Worker(
-    concurrency=2,  # Number of parallel workers
-    max_tasks_per_child=10,
-)
+# Change quality (0.0 to 1.0)
+cmd = [dcm2jpg_path, "-q", "1.0", dicom_path, temp_output_path]
 ```
 
-## Contributing
+### GCS Paths
 
-1. Follow existing code patterns
-2. Add appropriate logging
-3. Include error handling
-4. Update documentation
-5. Test thoroughly
+Modify GCS destination paths in `extract_and_upload_dicom_reports.py`:
 
-## License
+```python
+# CSV path
+csv_gcs_path = "eden-dataset-vlms/sample-test/dicom-reports-extracted-sample.csv"
 
-[Your License Here]
+# DICOM files path
+destination = f"gs://{bucket}/eden-dataset-vlms/sample-test/dicom-files/"
+
+# JPEG images path
+gcs_path = f"eden-dataset-vlms/sample-test/images-jpg/{file}"
+```
+
+## Performance Considerations
+
+- **Pagination**: Large datasets are processed in pages to avoid database overload
+- **Batching**: Records are processed in batches for efficient memory usage
+- **Parallel Conversion**: DICOM to JPEG conversions run in parallel via Celery
+- **Parallel Uploads**: JPEG file uploads run in parallel via Celery
+- **Progress Tracking**: Script can resume from last checkpoint if interrupted
+
+## Security
+
+- Never commit `.env` files (already in `.gitignore`)
+- Use service accounts for GCS access when possible
+- Rotate GCS credentials regularly
+- Limit GCS bucket access to write permissions only
+- Use least-privilege principles for database access
+
+## Additional Resources
+
+- **Dataset Documentation**: See `README-dataset.md` in the GCS bucket for detailed dataset structure
+- **GCS Location**: `gs://ai-training-dev/eden-dataset-vlms/sample-test/README-dataset.md`
 
 ## Support
 
 For issues or questions:
 - Check logs: `make logs`
-- Review Flower dashboard
-- Verify AWS S3 origin bucket permissions and credentials
-- Verify Google Cloud Storage destination bucket permissions
-- Test AWS CLI access: `aws s3 ls s3://s3-origin-bucket-name/`
-- Test gsutil access: `gsutil ls gs://gcs-bucket-name/`
-- Verify database connections
-
-## Additional Notes
-
-### DICOM File Storage
-
-The current implementation assumes DICOM files are stored with file paths accessible to the ETL service. If your system uses:
-- **Different storage location**: Modify `_upload_dicom_files` in `sync/dicom_pipeline.py`
-- **Different table structure**: Update queries in `queries/chest_dicom_studies.py`
-- **External API**: Implement API client in `sync/dicom_pipeline.py`
-
-### Performance Considerations
-
-- Large batches may take time to process due to cross-cloud copying
-- Monitor both S3 egress and GCS ingress costs
-- Consider rate limiting for very large batches
-- Use Celery concurrency settings to control parallel processing
-- `gsutil` automatically handles parallel transfers and retries
-
-### Security
-
-- Never commit `.env` files
-- Use IAM roles for AWS S3 access when possible
-- Use service accounts for GCS access when possible
-- Rotate AWS and GCS credentials regularly
-- Limit S3 origin bucket access to read-only permissions
-- Limit GCS destination bucket access to write permissions only
-- Use least-privilege principles for both cloud providers
+- Review Flower dashboard: `http://localhost:5555/flower`
+- Verify GCS credentials and permissions
+- Test database connections
+- Check Docker container status: `docker ps`
