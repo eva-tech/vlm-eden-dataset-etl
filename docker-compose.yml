@@ -1,0 +1,93 @@
+version: "3.7"
+services:
+  redis_intelligence:
+    image: "redis:alpine"
+    container_name: redis_intelligence
+    ports:
+      - "6379:6379"
+    networks:
+      - mynetwork
+  celery_worker_intelligence:
+    entrypoint: python run_worker.py
+    container_name: celery_worker_intelligence
+    ports:
+      - "5001:8000"
+    depends_on:
+      - redis_intelligence
+    image: "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}-celery"
+    restart: on-failure
+    build:
+      dockerfile: "${DOCKERFILE}"
+      cache_from:
+        - "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}"
+      context: .
+      target: "${TARGET}-celery"
+    volumes:
+      - "./:/intelligence"
+    environment:
+      DEBUG: "False"
+      IMAGE_TAG_NAME: "${IMAGE_TAG_NAME}"
+      TARGET: "${TARGET}"
+      FULL_ECR_REPOSITORY: "${FULL_ECR_REPOSITORY}"
+    networks:
+      - mynetwork
+  flower:
+    entrypoint: celery flower -A cron_tasks --conf=flower_config.py
+    image: "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}-flower"
+    container_name: celery_flower_intelligence
+    restart: on-failure
+    depends_on:
+      - redis_intelligence
+    build:
+      dockerfile: "${DOCKERFILE}"
+      cache_from:
+        - "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}"
+      context: .
+      target: "${TARGET}-flower"
+    ports:
+      - "5555:5555"
+    environment:
+      BROKER_URL: ${REDIS_URL}
+      FLOWER_USER: ${FLOWER_USER}
+      FLOWER_PASSWORD: ${FLOWER_PASSWORD}
+    networks:
+      - mynetwork
+  celery_beat:
+    entrypoint: celery -A cron_tasks beat -l INFO
+    container_name: celery_beat_intelligence
+    depends_on:
+      - redis_intelligence
+      - celery_worker_intelligence
+    image: "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}-celery-beat"
+    restart: on-failure
+    build:
+      dockerfile: "${DOCKERFILE}"
+      cache_from:
+        - "${FULL_ECR_REPOSITORY}:${IMAGE_TAG_NAME}"
+      context: .
+      target: "${TARGET}-celery-beat"
+    volumes:
+      - "./:/intelligence"
+    environment:
+      DEBUG: "False"
+      IMAGE_TAG_NAME: "${IMAGE_TAG_NAME}"
+      TARGET: "${TARGET}"
+      FULL_ECR_REPOSITORY: "${FULL_ECR_REPOSITORY}"
+    networks:
+      - mynetwork
+  postgres_intelligence:
+    image: "postgres:13.2-alpine"
+    container_name: postgres_intelligence
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    networks:
+      - mynetwork
+
+networks:
+  mynetwork:
+    name: mynetwork
