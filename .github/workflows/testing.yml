@@ -25,11 +25,19 @@ jobs:
       - name: Run black
         run: |
           python -m black . --check
-      - name: Run autoflake
+      - name: Run autoflake (check for unused imports)
         run: |
           python -m autoflake --exclude=__init__.py \
             --remove-unused-variables --remove-all-unused-imports \
-            --in-place --recursive --check .
+            --in-place --recursive --check . || {
+            echo "::error::Unused imports detected. Run 'make lint-fix' to auto-fix."
+            exit 1
+          }
+      - name: Detect unused code (vulture)
+        run: |
+          pip install vulture || true
+          vulture . --min-confidence 80 --exclude venv,__pycache__,.git,etl/__pycache__,sync/__pycache__,queries/__pycache__ || echo "::warning::Unused code detected (non-blocking)"
+        continue-on-error: true
       - name: Get Modified Files
         id: files
         uses: jitterbit/get-changed-files@v1

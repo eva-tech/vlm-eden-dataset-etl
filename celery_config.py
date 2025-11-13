@@ -1,8 +1,6 @@
-"""Celey configuration file."""
+"""Celery configuration file."""
 
 import os
-
-from celery.schedules import crontab
 
 accept_content = ["json"]
 broker_url = os.getenv("REDIS_URL")
@@ -20,9 +18,5 @@ worker_prefetch_multiplier = 1  # set this value to 1 to configure priority queu
 timezone = "America/Mexico_City"
 enable_utc = True
 
-beat_schedule = {
-    "discover_chest_dicom_studies": {
-        "task": "tasks.discover_chest_dicom_studies",
-        "schedule": crontab(minute="0", hour="2"),  # every day at 2am
-    },
-}
+# No scheduled tasks - ETL pipeline is run manually via extract_and_upload_dicom_reports.py
+beat_schedule = {}

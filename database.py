@@ -11,7 +11,7 @@ def create_connection_to_source():
 
     :return: psycopg2 connection
     """
-    load_dotenv(override=True)  # Override existing environment variables with .env file values
+    load_dotenv()
 
     conn = psycopg2.connect(
         database=os.getenv("SOURCE_DATABASE_NAME"),
@@ -28,7 +28,7 @@ def create_connection_to_destination():
 
     :return:    psycopg2 connection
     """
-    load_dotenv(override=True)  # Override existing environment variables with .env file values
+    load_dotenv()
 
     conn = psycopg2.connect(
         database=os.getenv("DESTINATION_DATABASE_NAME"),

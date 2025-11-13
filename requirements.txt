@@ -21,3 +21,9 @@ pytz==2022.7
 
 # HTTP requests for downloading files
 requests==2.31.0
+
+# Note: dcm4che is a Java-based DICOM toolkit and cannot be installed via pip.
+# The dcm2jpg conversion tool requires Java and the dcm4che library.
+# If a Python-based alternative (e.g., pydicom + PIL) is preferred, it should be
+# implemented in the transform module. For now, dcm4che must be installed separately
+# or provided via the Docker image.

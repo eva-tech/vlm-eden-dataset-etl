@@ -69,6 +69,27 @@ reload:
 format:
 	docker-compose up -d celery_worker_intelligence
 	docker exec celery_worker_intelligence sh scripts/lint.sh
+lint:
+	docker-compose up -d celery_worker_intelligence
+	docker exec celery_worker_intelligence sh scripts/lint.sh
+lint-fix:
+	docker-compose up -d celery_worker_intelligence
+	docker exec celery_worker_intelligence sh scripts/lint-fix.sh
+test:
+	docker-compose up -d celery_worker_intelligence
+	docker exec celery_worker_intelligence pytest tests/ -v
+test-unit:
+	docker-compose up -d celery_worker_intelligence
+	docker exec celery_worker_intelligence pytest tests/ -v -m unit
+test-integration:
+	docker-compose up -d celery_worker_intelligence
+	docker exec celery_worker_intelligence pytest tests/ -v -m integration
+test-smoke:
+	docker-compose up -d celery_worker_intelligence
+	docker exec celery_worker_intelligence pytest tests/test_smoke.py -v
+test-cov:
+	docker-compose up -d celery_worker_intelligence
+	docker exec celery_worker_intelligence pytest tests/ --cov=etl --cov-report=html --cov-report=term
 testing:
 	git checkout testing
 	git fetch --all
