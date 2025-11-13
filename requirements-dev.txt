@@ -1,0 +1,21 @@
+# Development dependencies for linting and code quality
+
+# Code formatting and import sorting
+black==23.3.0
+isort==5.12.0
+autoflake==2.2.0
+
+# Type checking
+mypy==1.3.0
+
+# Code style and documentation
+pydocstyle==6.3.0
+
+# Unused code detection (optional but recommended)
+vulture==2.9
+
+# Testing (for PR4)
+pytest==7.3.1
+pytest-cov==4.1.0
+pytest-mock==3.10.0
+

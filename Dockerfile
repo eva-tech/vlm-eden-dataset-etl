@@ -1,37 +1,13 @@
 FROM python:3.10 AS base
 
-RUN apt-get update && apt-get install -y curl gnupg git maven default-jdk
+RUN apt-get update && apt-get install -y curl gnupg default-jdk
 
-# Install dcm4che fork from GitHub
-RUN git clone https://github.com/eva-tech/dcm4che.git /tmp/dcm4che && \
-    cd /tmp/dcm4che && \
-    if [ -d "dcm4che-tool/dcm4che-tool-dcm2jpg" ]; then \
-        cd dcm4che-tool/dcm4che-tool-dcm2jpg && \
-        mvn clean package -DskipTests -Dmaven.test.skip=true || true; \
-    elif [ -d "tools/dcm2jpg" ]; then \
-        cd tools/dcm2jpg && \
-        mvn clean package -DskipTests -Dmaven.test.skip=true || true; \
-    else \
-        mvn clean install -DskipTests -Dmaven.test.skip=true -Dmaven.javadoc.skip=true || true; \
-    fi && \
-    cd /tmp/dcm4che && \
-    DCM2JPG_DIR=$(find . -type d -name "dcm2jpg*" -path "*/target/*" | head -1) && \
-    DCM2JPG_JAR=$(find . -name "*dcm2jpg*.jar" -path "*/target/*" ! -name "*-sources.jar" ! -name "*-javadoc.jar" | head -1) && \
-    if [ -n "$DCM2JPG_DIR" ] && [ -d "$DCM2JPG_DIR/bin" ]; then \
-        cp -r "$DCM2JPG_DIR" /usr/local/dcm2jpg && \
-        chmod +x /usr/local/dcm2jpg/bin/*.sh 2>/dev/null || true; \
-    elif [ -n "$DCM2JPG_JAR" ]; then \
-        cp "$DCM2JPG_JAR" /usr/local/dcm2jpg.jar && \
-        DCM4CHE_DIR=$(dirname "$(dirname "$DCM2JPG_JAR")") && \
-        cd "$DCM4CHE_DIR" && \
-        mvn dependency:copy-dependencies -DoutputDirectory=/usr/local/dcm2jpg-lib -DskipTests -q 2>/dev/null || true && \
-        echo '#!/bin/bash' > /usr/local/bin/dcm2jpg && \
-        echo 'java -cp "/usr/local/dcm2jpg.jar:/usr/local/dcm2jpg-lib/*" org.dcm4che3.tool.dcm2jpg.Dcm2Jpg "$@"' >> /usr/local/bin/dcm2jpg && \
-        chmod +x /usr/local/bin/dcm2jpg; \
-    fi && \
-    rm -rf /tmp/dcm4che
-
-ENV PATH="$PATH:/usr/local/dcm2jpg/bin:/usr/local/bin"
+# Note: dcm4che is a Java-based tool and cannot be installed via pip.
+# The dcm2jpg conversion functionality is provided by the dcm4che Java library.
+# If a Python wrapper becomes available, it should be added to requirements.txt.
+# For now, we keep a minimal Java installation for dcm2jpg support.
+# The actual dcm2jpg command will be provided by the dcm4che package if available,
+# or can be installed separately as needed.
 
 # Install Google Cloud SDK (gsutil) non-interactively
 # Using the official installation method with environment variables for non-interactive install

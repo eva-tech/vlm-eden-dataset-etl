@@ -1,0 +1,786 @@
+=== PR #2 Comments from xleninx and coderabbit ===
+
+=== PR Comments ===
+---
+Author: coderabbitai
+Date: 2025-11-12T22:33:17Z
+
+<!-- This is an auto-generated comment: summarize by coderabbit.ai -->
+<!-- This is an auto-generated comment: skip review by coderabbit.ai -->
+
+> [!IMPORTANT]
+> ## Review skipped
+> 
+> Auto incremental reviews are disabled on this repository.
+> 
+> Please check the settings in the CodeRabbit UI or the `.coderabbit.yaml` file in this repository. To trigger a single review, invoke the `@coderabbitai review` command.
+> 
+> You can disable this status message by setting the `reviews.review_status` to `false` in the CodeRabbit configuration file.
+
+<!-- end of auto-generated comment: skip review by coderabbit.ai -->
+
+<!-- walkthrough_start -->
+
+# Análisis del Pull Request
+
+## Walkthrough
+
+Se realiza una migración arquitectónica de AWS S3 hacia Google Cloud Storage (GCS), eliminando la infraestructura de sincronización de datos dimensionales heredada y consolidando la lógica en una tubería de extracción y carga de reportes DICOM con capacidades de paginación y procesamiento por lotes.
+
+## Changes
+
+| Cohort / Archivo(s) | Resumen de cambios |
+|---|---|
+| **Configuración e infraestructura** <br> `.env.dist`, `docker-compose.yml`, `Dockerfile`, `.gitignore` | Ampliación de variables de entorno para soportar GCS, Redis y Celery. Actualización de Dockerfile para instalar dcm4che, Google Cloud SDK y virtualenv de Python. Cambios en .gitignore para virtualenv y archivos de log. |
+| **Documentación** <br> `README.md`, `README-dataset.md`, `reference_queries.md` | Reescritura de README enfocada en GCS en lugar de S3. Adición de documentación del dataset EDEN VLM y ejemplos de queries de referencia para estudios de pecho. |
+| **Configuración de Celery y workers** <br> `celery_config.py`, `flower_config.py`, `run_worker.py`, `cron_tasks.py` | Eliminación de tareas programadas de sincronización. Remoción de migraciones en inicio de worker. Simplificación de cron_tasks a exportar solo la app. Eliminación de url_prefix en Flower. |
+| **Base de datos y conexiones** <br> `database.py`, `sync/database_breach.py` | Cambio a `load_dotenv(override=True)` y eliminación de función `run_general_migrations()`. Parámetro opcional `require_destination` en DatabaseBridge. |
+| **Servicios de almacenamiento y transferencia** <br> `sync/gcs_service.py`, `sync/dicom_pipeline.py`, `sync/chest_transfer_pipeline.py` | Introducción de GCSService para manejo de GCS. Reemplazo de S3Service por GCSService en pipeline DICOM. Nuevo pipeline de transferencia de datos de pecho. |
+| **Eliminación de sincronización heredada** <br> `sync/s3_service.py`, `sync/sync_base.py`, `sync/sync_validator.py`, `sync/facilities.py`, `sync/modalities.py`, `sync/organizations.py`, `sync/practitioners.py`, `sync/technicians.py`, `sync/studies.py`, `sync/constants.py` | Remoción completa de la arquitectura de sincronización de datos incluyendo clases base, servicios específicos por tabla y constantes asociadas. |
+| **Extracción y carga de reportes** <br> `extract_and_upload_dicom_reports.py`, `transfer_chest_data.py` | Nuevos scripts para orquestar extracción de reportes DICOM con paginación, conversión a JPEG y carga en GCS. |
+| **Queries y datos** <br> `queries/chest_dicom_studies.py`, `queries/get_chest_dicom_files_and_reports.py`, `queries/get_chest_dicom_files_and_reports.sql` | Actualización de queries para enfocarse en estudios de pecho (CR/DX), eliminación de lógica de ranking. Introducción de nuevas queries para recuperar archivos y reportes DICOM. Eliminación de queries de dim_facilities, dim_modalities, dim_practitioners, dim_technicians, fact_studies, schema_organizations y sync_records. |
+| **Migraciones de base de datos** <br> `migrations/20221214_01_9Jm6L.sql`, `migrations/20230104_01_r9HiK.sql`, `migrations/20230207_01_53Bud.sql`, `migrations/20230301_01_29RPQ.sql`, `migrations/20230426_01_BozYM.sql`, `migrations/20230510_01_V14Kk.sql`, `migrations/20230606_01_cY4nG.sql`, `migrations/20230627_01_81uau.sql`, `migrations/20241029_01_JnkId.sql`, `migrations/20241204_01_xSnrF.sql`, `migrations/20250103_01_AhiOW.sql`, `migrations/20250930_01_jmdvz.sql` | Eliminación de migraciones del modelo dimensional (dim_calendar, dim_facilities, dim_modalities, dim_practitioners, dim_technicians) y vistas asociadas. Remoción de tabla sync_records. |
+| **Migraciones generales** <br> `general_migrations/20240408_01_0CV2Y.sql` | Eliminación de tabla de organizaciones y sus índices. |
+| **Tasks de Celery** <br> `tasks.py` | Renombramiento de tareas S3 a GCS. Eliminación de tareas de sincronización por organización. Adición de tareas para descarga de DICOM, conversión a JPEG y carga en GCS. |
+| **Dependencias** <br> `requirements.txt`, `requirements-dev.txt` | Remoción de boto3, sqlparse, yoyo-migrations. Eliminación de herramientas de desarrollo (isort, black, autoflake, mypy, types-pytz, pydocstyle). |
+| **Configuración de yoyo** <br> `yoyo.ini`, `yoyog.ini` | Eliminación de secciones [DEFAULT] de configuración de migraciones. |
+| **Utilidades** <br> `utils.py` | Eliminación de archivo completo con funciones de utilidad. |
+
+## Sequence Diagram(s)
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant DICOMExtractor as DICOMReportsExtractor
+    participant DB as DatabaseBridge
+    participant GCS as GCSService
+    participant Local as Local Storage
+    participant Celery as Celery Task Group
+
+    Client->>DICOMExtractor: main()
+    DICOMExtractor->>DB: get_total_count()
+    DB-->>DICOMExtractor: total_count
+    
+    loop Para cada página
+        DICOMExtractor->>DB: fetch_query_results_page(page, page_size)
+        DB-->>DICOMExtractor: resultados de página
+        
+        loop Para cada lote en página
+            DICOMExtractor->>DICOMExtractor: extract_and_process_batch(lote)
+            
+            loop Para cada archivo en lote
+                DICOMExtractor->>Local: download_file(url)
+                Local-->>DICOMExtractor: archivo.dcm
+            end
+            
+            DICOMExtractor->>Celery: group(convert_dicom_to_jpg tasks)
+            Celery-->>DICOMExtractor: resultados de conversión
+            
+            DICOMExtractor->>DICOMExtractor: save_csv_rows()
+        end
+    end
+    
+    DICOMExtractor->>GCS: upload_to_gcs() [CSV, DICOM, JPEG]
+    GCS-->>DICOMExtractor: confirmación de carga
+    
+    DICOMExtractor->>Local: cleanup()
+    Local-->>DICOMExtractor: archivos eliminados
+    
+    DICOMExtractor-->>Client: resumen de operación
+```
+
+```mermaid
+sequenceDiagram
+    participant Old as Sistema Anterior (S3)
+    participant New as Sistema Nuevo (GCS)
+    
+    rect rgb(200, 150, 255)
+    Note over Old: Arquitectura Anterior
+    Old->>Old: SyncBase (clase base)
+    Old->>Old: SyncOrganizations
+    Old->>Old: SyncFacilities
+    Old->>Old: SyncModalities
+    Old->>Old: SyncPractitioners
+    Old->>Old: SyncStudies
+    Old->>Old: SyncValidator
+    Old->>Old: S3Service
+    end
+    
+    rect rgb(150, 200, 255)
+    Note over New: Arquitectura Nueva
+    New->>New: DICOMReportsExtractor
+    New->>New: GCSService
+    New->>New: ChestTransferPipeline
+    New->>New: extract_and_upload_dicom_reports.py
+    New->>New: transfer_chest_data.py
+    end
+    
+    Note over Old,New: Migraciones: eliminadas<br/>Queries: simplificadas<br/>Tasks: orientadas a DICOM
+```
+
+## Estimated code review effort
+
+🎯 5 (Critical) | ⏱️ ~120 minutos
+
+**Áreas que requieren atención especial:**
+
+- **`sync/gcs_service.py`**: Implementación completa de integración con GCS, incluye manejo de credenciales de Google y AWS, operaciones de copia entre nubes y error handling robusto.
+- **`extract_and_upload_dicom_reports.py`**: Lógica central de extracción con paginación, gestión de estado, procesamiento por lotes y múltiples puntos de carga de datos.
+- **`Dockerfile`**: Instalación de herramientas complejas (dcm4che desde GitHub, Google Cloud SDK) con lógica de detección de rutas y construcción con Maven.
+- **`queries/chest_dicom_studies.py`**: Cambios significativos en lógica de queries; eliminación de ranking de doctores; expansión de lógica de coincidencia de partes del cuerpo.
+- **`sync/dicom_pipeline.py`**: Migración completa de S3 a GCS; cambio de proveedores de servicios.
+- **Eliminación masiva de migraciones**: 12 archivos de migración removidos; verificar que no hay dependencias residuales en la base de datos.
+- **Cambios en `celery_config.py` y `tasks.py`**: Remoción de tareas de sincronización críticas; cambio de nomenclatura de tareas; nuevas tareas DICOM.
+- **`database.py` y `run_worker.py`**: Cambios en cómo se manejan las migraciones; verificar impacto en inicialización del worker.
+
+## Poem
+
+> 🐰 *La nube cambia de hogar,*  
+> *De AWS hacia Google vuela,*  
+> *DICOMs danzarán sin cela,*  
+> *Por GCS van a navegar.*  
+> *Sincronización se ha de olvidar,* ✨  
+> *¡Extracción nueva nos vela!* 🎉
+
+<!-- walkthrough_end -->
+
+<!-- pre_merge_checks_walkthrough_start -->
+
+## Pre-merge checks and finishing touches
+<details>
+<summary>✅ Passed checks (3 passed)</summary>
+
+|     Check name     | Status   | Explanation                                                                                                                                                                                          |
+| :----------------: | :------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  Description Check | ✅ Passed | Check skipped - CodeRabbit’s high-level summary is enabled.                                                                                                                                          |
+|     Title check    | ✅ Passed | El título describe claramente el cambio principal: la adición de conversión de DICOM a JPEG y la actualización de la tubería de extracción, lo que se alinea completamente con los objetivos del PR. |
+| Docstring Coverage | ✅ Passed | Docstring coverage is 100.00% which is sufficient. The required threshold is 80.00%.                                                                                                                 |
+
+</details>
+
+<!-- pre_merge_checks_walkthrough_end -->
+
+<!-- tips_start -->
+
+---
+
+Thanks for using [CodeRabbit](https://coderabbit.ai?utm_source=oss&utm_medium=github&utm_campaign=eva-tech/vlm-eden-dataset-etl&utm_content=2)! It's free for OSS, and your support helps us grow. If you like it, consider giving us a shout-out.
+
+<details>
+<summary>❤️ Share</summary>
+
+- [X](https://twitter.com/intent/tweet?text=I%20just%20used%20%40coderabbitai%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20the%20proprietary%20code.%20Check%20it%20out%3A&url=https%3A//coderabbit.ai)
+- [Mastodon](https://mastodon.social/share?text=I%20just%20used%20%40coderabbitai%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20the%20proprietary%20code.%20Check%20it%20out%3A%20https%3A%2F%2Fcoderabbit.ai)
+- [Reddit](https://www.reddit.com/submit?title=Great%20tool%20for%20code%20review%20-%20CodeRabbit&text=I%20just%20used%20CodeRabbit%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20proprietary%20code.%20Check%20it%20out%3A%20https%3A//coderabbit.ai)
+- [LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fcoderabbit.ai&mini=true&title=Great%20tool%20for%20code%20review%20-%20CodeRabbit&summary=I%20just%20used%20CodeRabbit%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20proprietary%20code)
+
+</details>
+
+<sub>Comment `@coderabbitai help` to get the list of available commands and usage tips.</sub>
+
+<!-- tips_end -->
+
+<!-- internal state start -->
+
+
+<!-- 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 -->
+
+<!-- internal state end -->
+
+
+=== Review Comments ===
+---
+Author: coderabbitai
+State: CHANGES_REQUESTED
+Date: null
+
+**Actionable comments posted: 28**
+
+<details>
+<summary>📜 Review details</summary>
+
+**Configuration used**: CodeRabbit UI
+
+**Review profile**: ASSERTIVE
+
+**Plan**: Pro
+
+**Disabled knowledge base sources:**
+
+- Jira integration is disabled by default for public repositories
+
+> You can enable these sources in your CodeRabbit configuration.
+
+<details>
+<summary>📥 Commits</summary>
+
+Reviewing files that changed from the base of the PR and between d02bc80c9d9f61d35bf05558992fa904d9921faf and 71c0263d8eb4657fffc53650a80d8d8f606aa74e.
+
+</details>
+
+<details>
+<summary>📒 Files selected for processing (57)</summary>
+
+* `.env.dist` (1 hunks)
+* `.gitignore` (1 hunks)
+* `Dockerfile` (2 hunks)
+* `README-dataset.md` (1 hunks)
+* `README.md` (8 hunks)
+* `celery_config.py` (0 hunks)
+* `cron_tasks.py` (1 hunks)
+* `database.py` (2 hunks)
+* `docker-compose.yml` (2 hunks)
+* `extract_and_upload_dicom_reports.py` (1 hunks)
+* `flower_config.py` (0 hunks)
+* `general_migrations/20240408_01_0CV2Y.sql` (0 hunks)
+* `migrations/20221214_01_9Jm6L.sql` (0 hunks)
+* `migrations/20230104_01_r9HiK.sql` (0 hunks)
+* `migrations/20230207_01_53Bud.sql` (0 hunks)
+* `migrations/20230301_01_29RPQ.sql` (0 hunks)
+* `migrations/20230426_01_BozYM.sql` (0 hunks)
+* `migrations/20230510_01_V14Kk.sql` (0 hunks)
+* `migrations/20230606_01_cY4nG.sql` (0 hunks)
+* `migrations/20230627_01_81uau.sql` (0 hunks)
+* `migrations/20241029_01_JnkId.sql` (0 hunks)
+* `migrations/20241204_01_xSnrF.sql` (0 hunks)
+* `migrations/20250103_01_AhiOW.sql` (0 hunks)
+* `migrations/20250930_01_jmdvz.sql` (0 hunks)
+* `queries/chest_dicom_studies.py` (6 hunks)
+* `queries/dim_facitities.py` (0 hunks)
+* `queries/dim_modalities.py` (0 hunks)
+* `queries/dim_practitioners.py` (0 hunks)
+* `queries/dim_technicians.py` (0 hunks)
+* `queries/fact_studies.py` (0 hunks)
+* `queries/get_chest_dicom_files_and_reports.py` (1 hunks)
+* `queries/get_chest_dicom_files_and_reports.sql` (1 hunks)
+* `queries/schema_organizations.py` (0 hunks)
+* `queries/sync_records.py` (0 hunks)
+* `reference_queries.md` (1 hunks)
+* `requirements-dev.txt` (0 hunks)
+* `requirements.txt` (1 hunks)
+* `run_worker.py` (0 hunks)
+* `sync/chest_transfer_pipeline.py` (1 hunks)
+* `sync/constants.py` (0 hunks)
+* `sync/database_breach.py` (2 hunks)
+* `sync/dicom_pipeline.py` (9 hunks)
+* `sync/facilities.py` (0 hunks)
+* `sync/gcs_service.py` (1 hunks)
+* `sync/modalities.py` (0 hunks)
+* `sync/organizations.py` (0 hunks)
+* `sync/practitioners.py` (0 hunks)
+* `sync/s3_service.py` (0 hunks)
+* `sync/studies.py` (0 hunks)
+* `sync/sync_base.py` (0 hunks)
+* `sync/sync_validator.py` (0 hunks)
+* `sync/technicians.py` (0 hunks)
+* `tasks.py` (6 hunks)
+* `transfer_chest_data.py` (1 hunks)
+* `utils.py` (0 hunks)
+* `yoyo.ini` (0 hunks)
+* `yoyog.ini` (0 hunks)
+
+</details>
+
+<details>
+<summary>💤 Files with no reviewable changes (37)</summary>
+
+* migrations/20230510_01_V14Kk.sql
+* migrations/20230104_01_r9HiK.sql
+* run_worker.py
+* sync/modalities.py
+* sync/practitioners.py
+* sync/s3_service.py
+* queries/dim_facitities.py
+* general_migrations/20240408_01_0CV2Y.sql
+* migrations/20230606_01_cY4nG.sql
+* migrations/20250930_01_jmdvz.sql
+* queries/fact_studies.py
+* sync/constants.py
+* flower_config.py
+* yoyog.ini
+* migrations/20230301_01_29RPQ.sql
+* queries/dim_modalities.py
+* migrations/20221214_01_9Jm6L.sql
+* sync/facilities.py
+* utils.py
+* migrations/20230207_01_53Bud.sql
+* queries/sync_records.py
+* migrations/20241029_01_JnkId.sql
+* sync/sync_base.py
+* celery_config.py
+* yoyo.ini
+* sync/sync_validator.py
+* queries/dim_technicians.py
+* migrations/20230627_01_81uau.sql
+* migrations/20250103_01_AhiOW.sql
+* requirements-dev.txt
+* queries/dim_practitioners.py
+* sync/technicians.py
+* migrations/20230426_01_BozYM.sql
+* sync/studies.py
+* sync/organizations.py
+* migrations/20241204_01_xSnrF.sql
+* queries/schema_organizations.py
+
+</details>
+
+<details>
+<summary>🧰 Additional context used</summary>
+
+<details>
+<summary>🧬 Code graph analysis (7)</summary>
+
+<details>
+<summary>transfer_chest_data.py (1)</summary><blockquote>
+
+<details>
+<summary>sync/chest_transfer_pipeline.py (3)</summary>
+
+* `ChestTransferPipeline` (16-182)
+* `transfer_all_chest_data` (29-109)
+* `close` (180-182)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>sync/dicom_pipeline.py (2)</summary><blockquote>
+
+<details>
+<summary>sync/gcs_service.py (4)</summary>
+
+* `GCSService` (15-458)
+* `upload_report_metadata` (364-398)
+* `upload_report` (297-362)
+* `upload_dicom_file` (224-295)
+
+</details>
+<details>
+<summary>sync/database_breach.py (2)</summary>
+
+* `DatabaseBridge` (8-42)
+* `new_cursor` (27-33)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>extract_and_upload_dicom_reports.py (3)</summary><blockquote>
+
+<details>
+<summary>sync/database_breach.py (3)</summary>
+
+* `DatabaseBridge` (8-42)
+* `new_cursor` (27-33)
+* `close_connections` (35-42)
+
+</details>
+<details>
+<summary>sync/gcs_service.py (1)</summary>
+
+* `GCSService` (15-458)
+
+</details>
+<details>
+<summary>tasks.py (2)</summary>
+
+* `convert_dicom_to_jpg` (179-281)
+* `upload_file_to_gcs` (285-336)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>sync/database_breach.py (2)</summary><blockquote>
+
+<details>
+<summary>database.py (2)</summary>
+
+* `create_connection_to_source` (9-23)
+* `create_connection_to_destination` (26-40)
+
+</details>
+<details>
+<summary>sync/chest_transfer_pipeline.py (1)</summary>
+
+* `close` (180-182)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>sync/chest_transfer_pipeline.py (2)</summary><blockquote>
+
+<details>
+<summary>sync/database_breach.py (3)</summary>
+
+* `DatabaseBridge` (8-42)
+* `new_cursor` (27-33)
+* `close_connections` (35-42)
+
+</details>
+<details>
+<summary>sync/gcs_service.py (3)</summary>
+
+* `GCSService` (15-458)
+* `upload_dicom_file` (224-295)
+* `upload_report` (297-362)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>tasks.py (1)</summary><blockquote>
+
+<details>
+<summary>sync/dicom_pipeline.py (1)</summary>
+
+* `get_eligible_studies` (49-72)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>queries/chest_dicom_studies.py (1)</summary><blockquote>
+
+<details>
+<summary>sync/dicom_pipeline.py (1)</summary>
+
+* `get_ranked_doctors` (35-47)
+
+</details>
+
+</blockquote></details>
+
+</details><details>
+<summary>🪛 dotenv-linter (4.0.0)</summary>
+
+<details>
+<summary>.env.dist</summary>
+
+[warning] 13-13: [UnorderedKey] The SOURCE_DATABASE_PASS key should go before the SOURCE_DATABASE_USER key
+
+(UnorderedKey)
+
+---
+
+[warning] 14-14: [UnorderedKey] The SOURCE_DATABASE_HOST key should go before the SOURCE_DATABASE_NAME key
+
+(UnorderedKey)
+
+---
+
+[warning] 15-15: [UnorderedKey] The SOURCE_DATABASE_PORT key should go before the SOURCE_DATABASE_USER key
+
+(UnorderedKey)
+
+---
+
+[warning] 28-28: [UnorderedKey] The DESTINATION_DATABASE_PASS key should go before the DESTINATION_DATABASE_USER key
+
+(UnorderedKey)
+
+---
+
+[warning] 29-29: [UnorderedKey] The DESTINATION_DATABASE_HOST key should go before the DESTINATION_DATABASE_NAME key
+
+(UnorderedKey)
+
+---
+
+[warning] 30-30: [UnorderedKey] The DESTINATION_DATABASE_PORT key should go before the DESTINATION_DATABASE_USER key
+
+(UnorderedKey)
+
+---
+
+[warning] 37-37: [UnorderedKey] The BROKER_URL key should go before the REDIS_URL key
+
+(UnorderedKey)
+
+---
+
+[warning] 48-48: [UnorderedKey] The AWS_REGION_NAME key should go before the AWS_SECRET_ACCESS_KEY key
+
+(UnorderedKey)
+
+---
+
+[warning] 70-70: [UnorderedKey] The FLOWER_PASSWORD key should go before the FLOWER_USER key
+
+(UnorderedKey)
+
+</details>
+
+</details>
+<details>
+<summary>🪛 Hadolint (2.14.0)</summary>
+
+<details>
+<summary>Dockerfile</summary>
+
+[warning] 3-3: Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`
+
+(DL3008)
+
+---
+
+[info] 3-3: Avoid additional packages by specifying `--no-install-recommends`
+
+(DL3015)
+
+---
+
+[info] 3-3: Delete the apt lists (/var/lib/apt/lists) after installing something
+
+(DL3009)
+
+---
+
+[warning] 6-6: Use WORKDIR to switch to a directory
+
+(DL3003)
+
+---
+
+[warning] 6-6: Set the SHELL option -o pipefail before RUN with a pipe in it. If you are using /bin/sh in an alpine image or if your shell is symlinked to busybox then consider explicitly setting your SHELL to /bin/ash, or disable this check
+
+(DL4006)
+
+---
+
+[warning] 40-40: Set the SHELL option -o pipefail before RUN with a pipe in it. If you are using /bin/sh in an alpine image or if your shell is symlinked to busybox then consider explicitly setting your SHELL to /bin/ash, or disable this check
+
+(DL4006)
+
+---
+
+[warning] 72-72: Avoid use of cache directory with pip. Use `pip install --no-cache-dir <package>`
+
+(DL3042)
+
+</details>
+
+</details>
+<details>
+<summary>🪛 OSV Scanner (2.2.4)</summary>
+
+<details>
+<summary>requirements.txt</summary>
+
+[MEDIUM] 22-22: requests 2.31.0: Requests vulnerable to .netrc credentials leak via malicious URLs
+
+(GHSA-9hjg-9r4m-mvj7)
+
+---
+
+[MEDIUM] 22-22: requests 2.31.0: Requests `Session` object does not verify requests after making first request with verify=False
+
+(GHSA-9wx4-h78v-vm56)
+
+</details>
+
+</details>
+
+</details>
+
+<details>
+<summary>🔇 Additional comments (14)</summary><blockquote>
+
+<details>
+<summary>.gitignore (2)</summary><blockquote>
+
+`2-2`: **Convención estándar de Python para entornos virtuales.**
+
+La actualización de `venv` a `.venv` sigue la convención moderna de proyectos Python, mejorando la consistencia con las mejores prácticas de la industria.
+
+---
+
+`6-6`: **Exclusión de archivos de registro (logs).**
+
+La adición de `*.log` es apropiada y alineada con las mejoras operacionales del PR (mediciones de tiempo de fase, monitoreo de Celery). Sigue la mejor práctica de excluir artefactos de tiempo de ejecución del control de versiones.
+
+</blockquote></details>
+<details>
+<summary>database.py (1)</summary><blockquote>
+
+`1-40`: **La eliminación de `run_general_migrations()` es segura y no deja referencias huérfanas.**
+
+La verificación confirmó que no existen referencias restantes a la función `run_general_migrations()` ni importaciones de yoyo en el código base. La eliminación fue limpia y no genera dependencias rotas.
+
+</blockquote></details>
+<details>
+<summary>cron_tasks.py (1)</summary><blockquote>
+
+`1-11`: **¡Excelente refactorización!**
+
+La simplificación del módulo para exportar únicamente la app de Celery mejora la claridad y mantiene una superficie de API limpia. La declaración explícita de `__all__` es una buena práctica.
+
+</blockquote></details>
+<details>
+<summary>sync/database_breach.py (1)</summary><blockquote>
+
+`41-42`: **Buena programación defensiva.**
+
+La protección para cerrar `destination_conn` solo si existe es correcta y previene errores cuando la conexión de destino es opcional.
+
+</blockquote></details>
+<details>
+<summary>docker-compose.yml (1)</summary><blockquote>
+
+`46-59`: **Configuración correcta del puerto de Flower.**
+
+La configuración explícita del puerto 5555 para Flower con el mapeo correspondiente es clara y correcta.
+
+</blockquote></details>
+<details>
+<summary>transfer_chest_data.py (1)</summary><blockquote>
+
+`47-49`: **Manejo de errores robusto.**
+
+La captura de excepciones con `exc_info=True` proporciona trazas completas para depuración, y el código de salida apropiado facilita la integración con sistemas de orquestación.
+
+</blockquote></details>
+<details>
+<summary>extract_and_upload_dicom_reports.py (2)</summary><blockquote>
+
+`43-67`: **Inicialización correcta con creación de directorios.**
+
+La inicialización del extractor es sólida: crea directorios de salida, inicializa el servicio GCS y configura el seguimiento de progreso. El uso de `tempfile.mkdtemp` garantiza directorios temporales únicos.
+
+---
+
+`465-613`: **Función principal bien estructurada con manejo robusto de errores.**
+
+La función `main()` orquesta correctamente todo el pipeline:
+- Inicializa servicios y carga progreso previo
+- Procesa páginas con paginación y lotes
+- Maneja errores con registro detallado
+- Cierra conexiones de base de datos en bloque `finally`
+- Proporciona resúmenes completos de tiempo y estadísticas
+
+El código permite reanudar desde un checkpoint, lo cual es excelente para pipelines largos.
+
+</blockquote></details>
+<details>
+<summary>sync/dicom_pipeline.py (2)</summary><blockquote>
+
+`19-19`: **Migración limpia de S3 a GCS.**
+
+La migración de `S3Service` a `GCSService` se ha realizado de manera consistente: importación actualizada, parámetros del constructor modificados, y todas las referencias internas actualizadas. El cambio mantiene la misma estructura de la API pública.
+
+
+
+Also applies to: 90-103
+
+---
+
+`60-62`: **Buena práctica: eliminación defensiva de punto y coma final.**
+
+El código ahora elimina punto y coma y espacios en blanco finales antes de agregar la cláusula `LIMIT`, lo que previene errores de sintaxis SQL. Esto es especialmente útil cuando se trabaja con consultas definidas externamente que pueden o no tener terminador.
+
+</blockquote></details>
+<details>
+<summary>README.md (1)</summary><blockquote>
+
+`1-547`: **Documentación completa y bien estructurada.**
+
+El README actualizado proporciona documentación exhaustiva que cubre:
+- Estructura del repositorio y arquitectura del sistema
+- Instalación con Docker y configuración de GCS
+- Instrucciones de uso detalladas con ejemplos de salida
+- Estructura del bucket GCS y convenciones de nomenclatura de archivos
+- Guías de solución de problemas específicas para GCS, dcm4che y Celery
+- Consideraciones de configuración y rendimiento
+
+La documentación es clara, práctica y facilita que nuevos desarrolladores comprendan y utilicen el sistema.
+
+</blockquote></details>
+<details>
+<summary>sync/gcs_service.py (1)</summary><blockquote>
+
+`48-63`: **Configuración robusta de credenciales con múltiples rutas de respaldo.**
+
+La lógica de configuración de credenciales maneja correctamente varios escenarios:
+- Usa la ruta explícita de credenciales si se proporciona
+- Intenta activar la cuenta de servicio con gcloud
+- Busca el binario gcloud en múltiples ubicaciones
+- No falla si la activación no funciona (ya que las credenciales aún pueden funcionar)
+
+Esta implementación proporciona buena resiliencia para diferentes entornos de despliegue.
+
+</blockquote></details>
+<details>
+<summary>queries/chest_dicom_studies.py (1)</summary><blockquote>
+
+`108-124`: **Lógica de coincidencia de partes del cuerpo ampliada y bien diseñada.**
+
+La expansión de los criterios de coincidencia de partes del cuerpo incluye términos en múltiples idiomas (torax/thorax, pecho, peito, tórax) y busca en varios campos (name, identifier, dicom_description). Esto proporciona:
+
+1. Soporte multilingüe para instalaciones internacionales
+2. Cobertura completa de variaciones de nomenclatura
+3. Coincidencia insensible a mayúsculas/minúsculas con ILIKE
+
+Este enfoque mejorará significativamente la recuperación de estudios relevantes en diferentes contextos lingüísticos y de configuración.
+
+
+
+Also applies to: 174-190
+
+</blockquote></details>
+
+</blockquote></details>
+
+</details>
+
+<!-- This is an auto-generated comment by CodeRabbit for review status -->
+
+---
+Author: xleninx
+State: COMMENTED
+Date: null
+
+
+
+---
+Author: xleninx
+State: COMMENTED
+Date: null
+
+
+
+---
+Author: xleninx
+State: COMMENTED
+Date: null
+
+
+
+---
+Author: xleninx
+State: COMMENTED
+Date: null
+
+
+
+---
+Author: xleninx
+State: COMMENTED
+Date: null
+
+
+
+---
+Author: xleninx
+State: COMMENTED
+Date: null
+
+
+
+---
+Author: xleninx
+State: COMMENTED
+Date: null
+
+
+

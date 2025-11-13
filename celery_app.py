@@ -14,7 +14,7 @@ default_config = "celery_config"
 
 app.config_from_object(default_config)
 
-app.conf.update({"CELERY_IMPORTS": ["tasks", "cron_tasks"]})
+app.conf.update({"CELERY_IMPORTS": ["cron_tasks", "etl.tasks.batch_tasks"]})
 
 app.conf.task_track_started = True
 app.conf.task_send_sent_event = True

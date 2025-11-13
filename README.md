@@ -8,34 +8,142 @@ This system extracts DICOM files and associated reports from a PACS database, do
 
 ### Key Features
 
-- **DICOM Extraction**: Extracts DICOM files and reports from PostgreSQL PACS database
-- **DICOM to JPEG Conversion**: Converts DICOM files to JPEG using dcm4che toolkit
-- **Parallel Processing**: Uses Celery tasks for asynchronous DICOM conversion and file uploads
-- **Progress Tracking**: Implements pagination and batching with progress tracking and resumption capability
-- **GCS Upload**: Uploads DICOM files, JPEG images, and CSV metadata to GCS bucket
-- **Error Handling**: Robust error handling and logging throughout the pipeline
+- **Modular Architecture**: Clean separation of concerns with extract, transform, load, batching, and pipeline modules
+- **Celery-Based Parallel Processing**: Batches run in parallel across multiple Celery workers for improved performance
+- **Idempotent Operations**: Safe to rerun without data duplication
+- **Automatic Retries**: Tasks automatically retry on failure with exponential backoff
+- **Progress Tracking**: Resume from checkpoints if interrupted
+- **Comprehensive Logging**: Detailed logging and metrics for observability
+
+## Architecture
+
+### Module Structure
+
+The ETL system is organized into modular components:
+
+```
+vlm-eden-dataset-etl/
+├── etl/                              # ETL package
+│   ├── extract/                      # Extraction module
+│   │   ├── query_executor.py        # Database query execution
+│   │   └── data_fetcher.py          # File downloading
+│   ├── transform/                    # Transformation module
+│   │   ├── data_processor.py        # Data processing and CSV preparation
+│   │   └── dicom_converter.py       # DICOM to JPG conversion
+│   ├── load/                         # Loading module
+│   │   └── gcs_uploader.py          # GCS file uploads
+│   ├── batching/                     # Batching module
+│   │   └── batch_creator.py         # Batch creation and management
+│   ├── tasks/                        # Celery tasks module
+│   │   └── batch_tasks.py           # Batch processing tasks
+│   └── pipeline/                     # Pipeline orchestration
+│       └── etl_pipeline.py          # Main ETL pipeline orchestrator
+├── extract_and_upload_dicom_reports.py  # Main entrypoint
+├── queries/                          # SQL query definitions
+├── sync/                             # Legacy modules (database, GCS service)
+├── tasks.py                          # Legacy Celery tasks
+└── celery_app.py                     # Celery application configuration
+```
+
+### ETL Pipeline Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         ETL Pipeline Flow                         │
+└─────────────────────────────────────────────────────────────────┘
+
+1. INITIALIZATION
+   └─> ETLPipeline.__init__()
+       ├─> Initialize QueryExecutor
+       ├─> Initialize BatchCreator
+       ├─> Initialize GCSUploader
+       └─> Create output directories
+
+2. EXTRACTION PHASE
+   └─> ETLPipeline.run()
+       ├─> QueryExecutor.get_total_count()  [Get total records]
+       │
+       └─> For each page (parallel via Celery):
+           └─> process_page_batch_task.s()
+               ├─> QueryExecutor.fetch_page()  [Fetch page data]
+               │
+               └─> For each batch (parallel via Celery):
+                   └─> process_batch_task.s()
+                       ├─> DataProcessor.process_batch()  [Process data]
+                       ├─> DataProcessor.prepare_csv_rows()  [Prepare CSV]
+                       └─> DataFetcher.download_file()  [Download DICOM]
+
+3. TRANSFORMATION PHASE (within batches)
+   └─> DataProcessor.process_batch()
+       ├─> Group files by study/series/instance
+       ├─> Aggregate report fields at study level
+       └─> Prepare CSV rows with metadata
+
+4. LOADING PHASE
+   └─> ETLPipeline.upload_to_gcs()
+       ├─> GCSUploader.upload_file()  [Upload CSV]
+       ├─> GCSUploader.upload_directory_contents()  [Upload DICOM files]
+       └─> GCSUploader.upload_directory_contents()  [Upload JPG images]
+
+5. COMPLETION
+   └─> Aggregate statistics
+       └─> Return summary with counts and timing
+```
+
+### Parallel Processing Architecture
+
+```
+Main Process (ETLPipeline)
+│
+├─> Dispatches page tasks to Celery (group of tasks)
+│   │
+│   └─> Celery Worker 1: process_page_batch_task (page 0)
+│       └─> Dispatches batch tasks (group of tasks)
+│           ├─> Celery Worker 1: process_batch_task (batch 0)
+│           ├─> Celery Worker 2: process_batch_task (batch 1)
+│           └─> Celery Worker 3: process_batch_task (batch 2)
+│
+├─> Celery Worker 2: process_page_batch_task (page 1)
+│   └─> Dispatches batch tasks...
+│
+└─> Celery Worker N: process_page_batch_task (page N)
+    └─> Dispatches batch tasks...
+
+All tasks run in parallel, results are aggregated when complete.
+```
 
 ## Repository Structure
 
 ```
 vlm-eden-dataset-etl/
-├── extract_and_upload_dicom_reports.py  # Main extraction script
+├── extract_and_upload_dicom_reports.py  # Main entrypoint
+├── etl/                                  # ETL package (new modular structure)
+│   ├── extract/                          # Extraction modules
+│   ├── transform/                        # Transformation modules
+│   ├── load/                             # Loading modules
+│   ├── batching/                         # Batching utilities
+│   ├── tasks/                            # Celery batch tasks
+│   └── pipeline/                         # Pipeline orchestration
 ├── queries/                              # SQL query definitions
-│   └── get_chest_dicom_files_and_reports.py  # DICOM extraction queries
-├── sync/                                 # Core modules
+│   └── get_chest_dicom_files_and_reports.py
+├── sync/                                 # Legacy modules
 │   ├── database_breach.py               # Database connection bridge
-│   └── gcs_service.py                   # GCS upload service
-├── tasks.py                             # Celery task definitions
-│   ├── convert_dicom_to_jpg            # DICOM to JPEG conversion task
-│   └── upload_file_to_gcs              # GCS file upload task
+│   └── gcs_service.py                   # GCS service (legacy)
+├── tasks.py                             # Legacy Celery tasks
 ├── celery_app.py                        # Celery application configuration
 ├── celery_config.py                     # Celery task scheduling
 ├── database.py                          # Database connection utilities
 ├── run_worker.py                        # Celery worker entry point
-├── Dockerfile                           # Docker image with dcm4che and gsutil
+├── Dockerfile                           # Docker image configuration
 ├── docker-compose.yml                   # Docker Compose configuration
 ├── Makefile                             # Make commands for development
 ├── requirements.txt                     # Python dependencies
+├── requirements-dev.txt                 # Development dependencies
+├── scripts/                              # Utility scripts
+│   ├── lint.sh                          # Linting script
+│   ├── lint-fix.sh                      # Auto-fix linting issues
+│   ├── celery.sh                        # Celery worker script
+│   └── flower.sh                        # Flower dashboard script
 ├── README.md                            # This file
 └── README-dataset.md                    # Dataset documentation (in GCS bucket)
 ```
@@ -48,7 +156,7 @@ vlm-eden-dataset-etl/
 - Google Cloud Storage bucket access (destination bucket)
 - Docker and Docker Compose (for local development)
 - Google Cloud SDK (gsutil) - installed in Docker image
-- Java JDK and Maven - for dcm4che (installed in Docker image)
+- Java JDK - for dcm4che (installed in Docker image)
 
 ## Installation
 
@@ -101,12 +209,12 @@ LOGGING_LEVEL=INFO
 
 The Docker image includes:
 - Python 3.10
-- dcm4che toolkit (for DICOM to JPEG conversion)
 - Google Cloud SDK (gsutil)
+- Java JDK (for dcm4che support)
 - All Python dependencies
 
 ```bash
-# Build Docker images (includes dcm4che installation)
+# Build Docker images
 make build
 
 # Start all services
@@ -136,17 +244,7 @@ docker exec -it celery_worker_intelligence gcloud auth application-default login
 
 ## Usage
 
-### DICOM Extraction and Upload Pipeline
-
-The main extraction script (`extract_and_upload_dicom_reports.py`) performs the following:
-
-1. **Query Database**: Extracts DICOM files and reports from randomly selected studies
-2. **Download DICOM Files**: Downloads DICOM files from source URLs
-3. **Convert to JPEG**: Converts DICOM files to JPEG using dcm4che (via Celery tasks)
-4. **Generate CSV**: Creates CSV file with metadata and report values
-5. **Upload to GCS**: Uploads DICOM files, JPEG images, and CSV to GCS bucket
-
-### Running the Extraction Script
+### Running the ETL Pipeline
 
 #### Basic Execution
 
@@ -155,24 +253,38 @@ The main extraction script (`extract_and_upload_dicom_reports.py`) performs the 
 docker exec celery_worker_intelligence python extract_and_upload_dicom_reports.py
 ```
 
+The pipeline will:
+1. **Extract**: Query database for DICOM files and reports
+2. **Transform**: Process data, download files, prepare CSV
+3. **Load**: Upload CSV, DICOM files, and JPG images to GCS
+
 #### Configuration
 
-The script can be configured by modifying `queries/get_chest_dicom_files_and_reports.py`:
+The pipeline can be configured by modifying query parameters and batch sizes:
 
-- **Number of Studies**: Modify the `LIMIT` clause in the query (currently set to 8 random studies)
-- **Pagination**: Adjust `PAGE_SIZE` and `BATCH_SIZE` in `extract_and_upload_dicom_reports.py`
-
-Example query modification:
+**Study Selection** (in `queries/get_chest_dicom_files_and_reports.py`):
 ```python
-# In queries/get_chest_dicom_files_and_reports.py
+# Select 8 random studies
 WITH all_studies AS (
   SELECT id
   FROM pacs_studies
   WHERE deleted = FALSE
   ORDER BY RANDOM()
-  LIMIT 8  # Change this number to select more/fewer studies
+  LIMIT 8
 )
 ```
+
+**Batch Sizes** (in `etl/pipeline/etl_pipeline.py`):
+```python
+PAGE_SIZE = 25    # Records per page from database
+BATCH_SIZE = 25   # Records processed per batch
+```
+
+**Celery Configuration**:
+- Tasks run in parallel across available Celery workers
+- Each page is processed independently
+- Batches within a page are processed in parallel
+- Automatic retries on failure (max 3 retries)
 
 ### Understanding the Output
 
@@ -182,52 +294,46 @@ The script provides detailed progress information:
 
 ```
 ======================================================================
-Starting DICOM and reports extraction process with pagination and batching
+Starting DICOM and reports extraction process with Celery batch processing
 ======================================================================
 EXTRACTION STATISTICS
 ======================================================================
-Total records: 8
-Total pages: 1
+Total records: 200
+Total pages: 8
 Page size: 25
 Batch size: 25
 Starting from page: 1
+Using Celery: True
 Count query time: 0:00:00 (0.19 seconds)
 ======================================================================
 
-Processing page 1/1 (100.0%)
-Downloading DICOM files: [==================================================] 8/8 (100.0%)
-Converting DICOM files to JPG...
-DICOM to JPG conversions: 8/8 successful
+Dispatching 8 page tasks to Celery workers...
+Waiting for page processing to complete (task group: abc123...)
+Processed 8/8 pages successfully
 
 EXTRACTION PHASE COMPLETE
 ======================================================================
-Extraction time: 0:00:05 (5.47 seconds)
-Total files to download: 8
-Total files downloaded: 8
-======================================================================
+Extraction time: 0:00:45 (45.23 seconds)
 
 Starting GCS upload...
 CSV uploaded successfully
 DICOM files uploaded successfully
-JPG images uploaded: 8/8 successful
+JPG images uploaded successfully
 
 EXTRACTION AND UPLOAD COMPLETE
 ======================================================================
 TIMING SUMMARY:
   Count query: 0:00:00 (0.19s)
-  Extraction: 0:00:05 (5.47s)
+  Extraction: 0:00:45 (45.23s)
   Upload: 0:00:12 (12.06s)
-  TOTAL TIME: 0:00:18 (18.61 seconds)
+  TOTAL TIME: 0:00:57 (57.48 seconds)
 
-FILES SUMMARY:
-  CSV file: /tmp/dicom_extract_xxxxx/dicom-reports-extracted-sample.csv
-  Downloaded DICOM files: 8
-  Files uploaded to GCS: 8
-
-GCS LOCATIONS:
-  CSV: gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-reports-extracted-sample.csv
-  DICOM files: gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-files/
-  JPG images: gs://ai-training-dev/eden-dataset-vlms/sample-test/images-jpg/
+STATISTICS SUMMARY:
+  Total records: 200
+  Processed files: 200
+  Files downloaded: 200
+  Files uploaded: 200
+  CSV rows: 200
 ======================================================================
 ```
 
@@ -249,7 +355,7 @@ gs://ai-training-dev/eden-dataset-vlms/sample-test/
 
 #### CSV File Structure
 
-The CSV file (`dicom-reports-extracted-sample.csv`) contains the following columns:
+The CSV file contains the following columns:
 
 - `study_id`: Unique study identifier
 - `series_number`: Series number within the study
@@ -257,76 +363,84 @@ The CSV file (`dicom-reports-extracted-sample.csv`) contains the following colum
 - `instance_number`: Instance number within the series
 - `file_path`: Original file path in the source system
 - `file_url`: URL to download the original DICOM file
-- `report_value`: Extracted report text from `pacs_report_fields.value` (aggregated at study level)
+- `report_value`: Extracted report text (aggregated at study level)
 - `field_created_at`: Timestamp when the report field was created
 - `downloaded`: Boolean indicating if the file was successfully downloaded
 - `local_file_path`: Local path where the file was stored during processing
 
-#### File Naming Convention
+### Idempotency and Progress Tracking
 
-All files use the `instance_id` (UUID format) as their filename:
-- **DICOM files**: `{instance_id}.dcm` → `gs://.../dicom-files/{instance_id}.dcm`
-- **JPEG files**: `{instance_id}.jpg` → `gs://.../images-jpg/{instance_id}.jpg`
+The pipeline is **idempotent** - it can be safely rerun without causing data duplication:
 
-This allows easy correlation between:
-- CSV metadata rows
-- DICOM files
-- JPEG converted images
+- **File Key Tracking**: Each file is tracked by a unique key `(study_id, series_id, instance_id, file_path)`
+- **Progress Persistence**: Progress is saved to `extraction_progress.json`
+- **Resume Capability**: If interrupted, the pipeline resumes from the last checkpoint
+- **Duplicate Prevention**: Already processed files are skipped automatically
 
-### Interpreting Results
+### Task Retries and Error Handling
 
-#### Success Indicators
+All Celery tasks include automatic retry logic:
 
-1. **Extraction Phase**:
-   - All DICOM files downloaded successfully
-   - All DICOM to JPEG conversions successful
-   - CSV file created with all rows
+- **Max Retries**: 3 attempts per task
+- **Retry Delay**: 60 seconds (exponential backoff)
+- **Error Logging**: Detailed error messages logged for debugging
+- **Graceful Degradation**: Failed tasks return error information without crashing the pipeline
 
-2. **Upload Phase**:
-   - CSV file uploaded to GCS
-   - All DICOM files uploaded to GCS
-   - All JPEG images uploaded to GCS
+## Development
 
-#### Progress Tracking
-
-The script creates a progress file (`extraction_progress.json`) that allows resuming from where it left off if interrupted. The progress file tracks:
-- Current page number
-- Processed file keys
-- CSV rows written
-
-#### Error Handling
-
-- Failed downloads are logged but don't stop the process
-- Failed conversions are logged with error details
-- Failed uploads are logged with error details
-- Check logs for specific error messages
-
-### Verifying Uploads
-
-#### List Files in GCS
+### Running Locally
 
 ```bash
-# List all files in the sample-test folder
-docker exec celery_worker_intelligence gsutil ls -r gs://ai-training-dev/eden-dataset-vlms/sample-test/
+# Start services
+make up
 
-# Count DICOM files
-docker exec celery_worker_intelligence gsutil ls gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-files/*.dcm | wc -l
+# Access worker bash
+make bash
 
-# Count JPEG files
-docker exec celery_worker_intelligence gsutil ls gs://ai-training-dev/eden-dataset-vlms/sample-test/images-jpg/*.jpg | wc -l
+# View logs
+make logs
+
+# Run linting
+make lint
+
+# Auto-fix linting issues
+make lint-fix
+
+# Rebuild after code changes
+make build
+make up
 ```
 
-#### Download Files for Verification
+### Testing
 
 ```bash
-# Download CSV file
-docker exec celery_worker_intelligence gsutil cp gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-reports-extracted-sample.csv .
+# Run all tests
+pytest
 
-# Download a specific DICOM file
-docker exec celery_worker_intelligence gsutil cp gs://ai-training-dev/eden-dataset-vlms/sample-test/dicom-files/{instance_id}.dcm .
+# Run with coverage
+pytest --cov=etl --cov-report=html
 
-# Download a specific JPEG file
-docker exec celery_worker_intelligence gsutil cp gs://ai-training-dev/eden-dataset-vlms/sample-test/images-jpg/{instance_id}.jpg .
+# Run specific test file
+pytest tests/test_batching.py
+
+# Run smoke test
+pytest tests/test_smoke.py -v
+```
+
+### Code Quality
+
+The project includes comprehensive static analysis:
+
+- **Unused Import Detection**: Autoflake checks for unused imports
+- **Code Formatting**: Black enforces consistent code style
+- **Import Sorting**: isort organizes imports
+- **Type Checking**: mypy performs static type analysis
+- **Unused Code Detection**: vulture identifies potentially unused code
+
+Run checks:
+```bash
+make lint          # Check for issues
+make lint-fix       # Auto-fix issues
 ```
 
 ## Monitoring
@@ -352,81 +466,14 @@ make logs
 docker-compose logs -f celery_worker_intelligence
 ```
 
-### Task Status
+### Task Metrics
 
-Check Celery task results:
-- Via Flower dashboard
-- In Redis (using Redis CLI)
-- In console output during script execution
-
-## Project Structure Details
-
-### Main Scripts
-
-- **`extract_and_upload_dicom_reports.py`**: Main extraction script that orchestrates the entire pipeline
-- **`queries/get_chest_dicom_files_and_reports.py`**: SQL queries for extracting DICOM files and reports
-- **`tasks.py`**: Celery tasks for DICOM to JPEG conversion and GCS uploads
-
-### Core Modules
-
-- **`sync/database_breach.py`**: Database connection management
-- **`sync/gcs_service.py`**: GCS service for file uploads
-
-### Docker Configuration
-
-- **`Dockerfile`**: Includes dcm4che installation, Google Cloud SDK, and Python dependencies
-- **`docker-compose.yml`**: Orchestrates Redis, Celery worker, Celery beat, and Flower services
-
-## Development
-
-### Running Locally
-
-```bash
-# Start services
-make up
-
-# Access worker bash
-make bash
-
-# View logs
-make logs
-
-# Rebuild after code changes
-make build
-make up
-```
-
-### Modifying the Query
-
-To change which studies are extracted, edit `queries/get_chest_dicom_files_and_reports.py`:
-
-```python
-# Select all studies (remove LIMIT)
-WITH all_studies AS (
-  SELECT id
-  FROM pacs_studies
-  WHERE deleted = FALSE
-)
-
-# Select specific number of random studies
-WITH all_studies AS (
-  SELECT id
-  FROM pacs_studies
-  WHERE deleted = FALSE
-  ORDER BY RANDOM()
-  LIMIT 8  # Change this number
-)
-```
-
-### Adjusting Batch Sizes
-
-Modify pagination and batch sizes in `extract_and_upload_dicom_reports.py`:
-
-```python
-# Configuration
-PAGE_SIZE = 25    # Records per page from database
-BATCH_SIZE = 25   # Records processed per batch
-```
+Each Celery task returns detailed metrics:
+- Batch ID for tracking
+- Records processed count
+- Files found/downloaded/uploaded counts
+- Success/failure status
+- Error messages (if failed)
 
 ## Troubleshooting
 
@@ -449,19 +496,6 @@ BATCH_SIZE = 25   # Records processed per batch
 - **Permission Issues**:
   - Ensure the authenticated account has Storage Object Admin permissions
   - Check bucket exists: `gsutil ls gs://ai-training-dev/`
-  - Test upload: `gsutil cp test.txt gs://ai-training-dev/test/`
-
-#### DICOM Conversion Failures
-
-- **dcm2jpg Not Found**:
-  - Rebuild Docker image: `make build`
-  - Verify dcm2jpg installation: `docker exec celery_worker_intelligence which dcm2jpg`
-  - Test conversion: `docker exec celery_worker_intelligence dcm2jpg --help`
-
-- **Conversion Errors**:
-  - Check DICOM file validity
-  - Verify Java is installed: `docker exec celery_worker_intelligence java -version`
-  - Check Celery worker logs for detailed error messages
 
 #### Celery Tasks Not Running
 
@@ -469,6 +503,13 @@ BATCH_SIZE = 25   # Records processed per batch
 - Verify Celery worker is running: `docker ps | grep celery`
 - Check logs: `make logs`
 - Restart services: `make down && make up`
+
+#### Task Failures
+
+- Check Flower dashboard for task details
+- Review Celery worker logs for error messages
+- Verify task retries are working (check retry count in Flower)
+- Check database connectivity from worker
 
 ### Debugging
 
@@ -480,49 +521,13 @@ LOGGING_LEVEL=DEBUG
 
 View detailed task execution in Flower dashboard or check Celery logs.
 
-## Configuration
-
-### Study Selection
-
-Modify `queries/get_chest_dicom_files_and_reports.py` to change study selection criteria:
-
-- **Random Selection**: Uses `ORDER BY RANDOM() LIMIT N`
-- **All Studies**: Remove `ORDER BY RANDOM() LIMIT` clause
-- **Specific Criteria**: Add `WHERE` clauses to filter studies
-
-### DICOM to JPEG Conversion
-
-The conversion uses dcm4che's `dcm2jpg` tool with quality 1.0 (maximum quality). To modify:
-
-Edit `tasks.py` in the `convert_dicom_to_jpg` function:
-
-```python
-# Change quality (0.0 to 1.0)
-cmd = [dcm2jpg_path, "-q", "1.0", dicom_path, temp_output_path]
-```
-
-### GCS Paths
-
-Modify GCS destination paths in `extract_and_upload_dicom_reports.py`:
-
-```python
-# CSV path
-csv_gcs_path = "eden-dataset-vlms/sample-test/dicom-reports-extracted-sample.csv"
-
-# DICOM files path
-destination = f"gs://{bucket}/eden-dataset-vlms/sample-test/dicom-files/"
-
-# JPEG images path
-gcs_path = f"eden-dataset-vlms/sample-test/images-jpg/{file}"
-```
-
 ## Performance Considerations
 
+- **Parallel Processing**: Pages and batches run in parallel via Celery workers
 - **Pagination**: Large datasets are processed in pages to avoid database overload
 - **Batching**: Records are processed in batches for efficient memory usage
-- **Parallel Conversion**: DICOM to JPEG conversions run in parallel via Celery
-- **Parallel Uploads**: JPEG file uploads run in parallel via Celery
 - **Progress Tracking**: Script can resume from last checkpoint if interrupted
+- **Idempotency**: Safe to rerun without data duplication
 
 ## Security
 
